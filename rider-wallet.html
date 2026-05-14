@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faster Rider - Financial Ledger</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; }
+        .rider-card { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); transition: 0.3s; }
+        .ledger-card { transition: transform 0.2s; border-left: 4px solid #e2e8f0; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <header class="bg-white p-4 flex items-center shadow-sm sticky top-0 z-50">
+        <i class="fas fa-arrow-left text-xl mr-4 cursor-pointer text-gray-600" onclick="history.back()"></i>
+        <h1 class="font-extrabold text-lg text-gray-800">Financial Ledger</h1>
+    </header>
+
+    <main class="flex-1 p-5 max-w-md mx-auto w-full">
+        <div id="balanceCard" class="rider-card rounded-[2.5rem] p-8 text-white shadow-2xl mb-8 relative overflow-hidden">
+            <div class="relative z-10">
+                <p id="balanceLabel" class="text-[10px] opacity-60 uppercase tracking-[0.2em] font-black mb-1">Net Office Balance</p>
+                <h2 id="balanceAmount" class="text-5xl font-extrabold mb-4 tracking-tighter">Rs. 0</h2>
+                <div id="statusBadge" class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/10 border border-white/20 text-white/80">
+                    Syncing Ledger...
+                </div>
+            </div>
+            <i class="fas fa-file-invoice-dollar absolute -right-8 -bottom-8 text-white/5 text-[10rem] -rotate-12"></i>
+        </div>
+
+        <div class="flex items-center justify-between mb-4 px-2">
+            <h3 class="font-black text-gray-800 uppercase text-[10px] tracking-widest">Orders Pending Settlement</h3>
+            <span class="text-[9px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-md font-bold uppercase">Unsettled</span>
+        </div>
+
+        <div id="transactionList" class="space-y-4 pb-10">
+            <div class="flex justify-center py-10">
+                <i class="fas fa-circle-notch animate-spin text-3xl text-slate-900"></i>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const SB_URL = "https://hkabhikizdlbavfkualt.supabase.co";
+        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrYWJoaWtpemRsYmF2Zmt1YWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODgyMjUsImV4cCI6MjA5MjA2NDIyNX0.iMlS6-M1aylW8K915LPYDHOg7qUxwu5GelH_CPHLP2U";
+        const _supabase = supabase.createClient(SB_URL, SB_KEY);
+
+        const riderPhone = (localStorage.getItem('rider_phone') || "").trim();
+
+        async function initWallet() {
+            if (!riderPhone) {
+                alert("❌ Rider phone not found!");
+                return;
+            }
+            fetchLedger();
+
+            _supabase.channel('custom-all-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchLedger)
+            .subscribe();
+        }
+
+        async function fetchLedger() {
+            try {
+                const { data: settings } = await _supabase.from('app_settings').select('rider_commission').eq('id', 1).single();
+                const riderCommConstant = parseFloat(settings?.rider_commission || 0);
+
+                const { data: orders, error } = await _supabase
+                    .from('orders')
+                    .select('*')
+                    .eq('rider_phone', riderPhone)
+                    .eq('is_settled', false)
+                    .eq('status', 'completed');
+
+                if (error) throw error;
+
+                let finalNetForOffice = 0;
+                let listHtml = "";
+
+                if (orders.length === 0) {
+                    document.getElementById('transactionList').innerHTML = `<div class="text-center py-20 opacity-40"><i class="fas fa-check-circle text-4xl mb-3 text-green-500"></i><p class="text-xs font-bold uppercase">All Clear! ✅</p></div>`;
+                    updateUI(0);
+                    return;
+                }
+
+                for (const o of orders) {
+                    const itemPrice = parseFloat(o.item_price || 0);
+                    const dc = parseFloat(o.dc_amount || 0);
+                    const collected = parseFloat(o.final_amount || 0);
+
+                    // Naya Theek Code (Is se replace kar dein):
+const { data: wallet } = await _supabase
+    .from('wallets')
+    .select('current_balance')
+    .eq('phone_number', o.customer_phone) 
+    .single();
+
+                    const prevBal = parseFloat(wallet?.current_balance || 0);
+                    const totalBillExpected = itemPrice + dc + prevBal;
+
+                    const riderTotalHaqq = itemPrice + riderCommConstant;
+                    const netToOffice = collected - riderTotalHaqq;
+
+                    finalNetForOffice += netToOffice;
+
+                    listHtml += `
+                        <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm ledger-card ${netToOffice >= 0 ? 'border-l-rose-500' : 'border-l-emerald-500'}">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <p class="text-[10px] font-black text-gray-400 uppercase">Order #${o.id.toString().slice(-5)}</p>
+                                    <h4 class="text-xs font-bold text-slate-800">${o.customer_name}</h4>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-[7px] font-black px-2 py-0.5 rounded-full ${netToOffice >= 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'} uppercase">
+                                        ${netToOffice >= 0 ? 'To Office' : 'From Office'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-y-1 gap-x-4 text-[9px] font-bold text-slate-500 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                <div class="flex justify-between"><span>Item:</span> <span class="text-slate-900">Rs. ${itemPrice}</span></div>
+                                <div class="flex justify-between"><span>DC:</span> <span class="text-slate-900">Rs. ${dc}</span></div>
+                                <div class="flex justify-between ${prevBal >= 0 ? 'text-rose-500' : 'text-emerald-600'}">
+                                    <span>Wallet:</span> <span>${prevBal >= 0 ? '+' : ''}${prevBal}</span>
+                                </div>
+                                <div class="flex justify-between text-blue-600 border-l pl-2 border-slate-200">
+                                    <span>Bill:</span> <span>Rs. ${totalBillExpected}</span>
+                                </div>
+                            </div>
+
+                            <div class="mt-3 flex justify-between items-end">
+                                <div class="text-[9px] font-bold text-slate-400">
+                                    <p>Cash Recv: <span class="text-slate-700">Rs. ${collected}</span></p>
+                                    <p>My Haqq: <span class="text-blue-600">Rs. ${riderTotalHaqq}</span></p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Amount</p>
+                                    <p class="text-base font-black ${netToOffice >= 0 ? 'text-rose-600' : 'text-emerald-600'}">
+                                        Rs. ${Math.abs(netToOffice)}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                document.getElementById('transactionList').innerHTML = listHtml;
+                updateUI(finalNetForOffice);
+
+            } catch (err) {
+                console.error("Ledger Error:", err);
+            }
+        }
+
+        function updateUI(balance) {
+            const amtEl = document.getElementById('balanceAmount');
+            const badge = document.getElementById('statusBadge');
+            const label = document.getElementById('balanceLabel');
+            const card = document.getElementById('balanceCard');
+
+            amtEl.innerText = `Rs. ${Math.abs(balance).toLocaleString()}`;
+
+            if (balance > 0) {
+                badge.innerText = "Cash in Hand (Office Debt)";
+                label.innerText = "Submit to Office";
+                card.style.background = "linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%)";
+            } else if (balance < 0) {
+                badge.innerText = "Office owes you money";
+                label.innerText = "Collect from Office";
+                card.style.background = "linear-gradient(135deg, #065f46 0%, #064e3b 100%)";
+            } else {
+                badge.innerText = "All Settlements Clear";
+                label.innerText = "Net Balance";
+                card.style.background = "linear-gradient(135deg, #0f172a 0%, #334155 100%)";
+            }
+        }
+
+        window.onload = initWallet;
+    </script>
+</body>
+</html>

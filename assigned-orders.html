@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faster - Tasks</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-[#0f172a] text-white">
+    <header class="p-4 flex items-center gap-4 border-b border-white/5 bg-[#0f172a] sticky top-0 z-50">
+        <button onclick="location.href='index.html'" class="text-orange-500 w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <h1 class="font-black uppercase text-sm tracking-widest text-orange-500">My Active Tasks</h1>
+    </header>
+
+    <div id="list" class="p-4 space-y-4">
+        <p class="text-center py-20 opacity-20 animate-pulse">Checking for tasks...</p>
+    </div>
+
+    <script>
+        const SB_URL = "https://hkabhikizdlbavfkualt.supabase.co";
+        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrYWJoaWtpemRsYmF2Zmt1YWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODgyMjUsImV4cCI6MjA5MjA2NDIyNX0.iMlS6-M1aylW8K915LPYDHOg7qUxwu5GelH_CPHLP2U";
+        const _supabase = supabase.createClient(SB_URL, SB_KEY);
+        const rider = JSON.parse(localStorage.getItem('riderData'));
+
+        async function load() {
+            if(!rider) return;
+            const { data } = await _supabase.from('orders')
+                .select('*')
+                .eq('rider_id', rider.rider_id)
+                .eq('status', 'assigned')
+                .order('created_at', { ascending: false });
+
+            const container = document.getElementById('list');
+            if(!data || data.length === 0) {
+                container.innerHTML = `<div class="text-center py-20 opacity-20 font-black uppercase text-xs">No Tasks assigned</div>`;
+                return;
+            }
+
+            container.innerHTML = data.map(o => `
+                <div onclick="location.href='order-details.html?id=${o.id}'" class="bg-slate-800/40 p-5 rounded-[2rem] border border-white/5 flex items-center justify-between shadow-xl active:scale-95 transition-all">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center text-slate-900 font-black text-lg capitalize">${o.customer_name[0]}</div>
+                        <div>
+                            <h3 class="font-bold text-white">${o.customer_name}</h3>
+                            <span class="text-[9px] px-2 py-0.5 bg-orange-500/10 text-orange-500 rounded-full font-black uppercase tracking-widest border border-orange-500/20">
+                                ${o.rider_status || 'New Task'}
+                            </span>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-slate-600"></i>
+                </div>
+            `).join('');
+        }
+        load();
+        setInterval(load, 5000); // Har 5 second baad list refresh hogi
+    </script>
+</body>
+</html>

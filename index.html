@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faster Rider - Home</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0f172a; color: white; overflow-x: hidden; }
+        
+        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+        
+        #sidebar { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); z-index: 100; }
+        .sidebar-off { transform: translateX(-100%); }
+        .sidebar-on { transform: translateX(0); }
+        .overlay { background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: none; position: fixed; inset: 0; z-index: 90; }
+        .overlay.active { display: block; }
+
+        .main-btn { transition: all 0.2s ease; height: 160px; }
+        .main-btn:active { transform: scale(0.96); }
+        
+        .shift-active { background: #22c55e; box-shadow: 0 0 15px rgba(34, 197, 94, 0.4); }
+        .shift-off { background: #ef4444; }
+
+        .brand-logo-gol { 
+            object-fit: cover; 
+            border-radius: 9999px; 
+            border: 2px solid #f97316;
+            background: white; 
+        }
+    </style>
+</head>
+<body class="p-4">
+
+    <div id="overlay" class="overlay" onclick="toggleSidebar()"></div>
+
+    <aside id="sidebar" class="sidebar-off fixed top-0 left-0 h-full w-[80%] max-w-[300px] glass-card shadow-2xl p-6 z-[100] flex flex-col">
+        <div class="flex justify-between items-center mb-8">
+            <div class="flex items-center gap-3">
+                <img id="sideLogo" src="" class="w-12 h-12 brand-logo-gol hidden" alt="Logo">
+                <div id="sidebarLogoFallback" class="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center">
+                    <i class="fas fa-motorcycle text-white"></i>
+                </div>
+                <div>
+                    <h2 id="sideRiderName" class="text-sm font-black text-white">Rider</h2>
+                    <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Faster Fleet</p>
+                </div>
+            </div>
+            <button onclick="toggleSidebar()"><i class="fas fa-arrow-left text-slate-400"></i></button>
+        </div>
+
+        <div class="mb-6 p-4 rounded-3xl bg-white/5 border border-white/5">
+            <div class="flex justify-between items-center mb-3">
+                <span class="text-[10px] font-bold uppercase text-slate-500">Shift Status</span>
+                <span id="statusLabel" class="text-[9px] font-black px-2 py-0.5 rounded-full bg-red-500">OFFLINE</span>
+            </div>
+            <button id="shiftBtn" onclick="toggleShift()" class="w-full shift-off py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest">
+                Start Shift
+            </button>
+        </div>
+
+        <div class="space-y-1">
+            <button onclick="location.href='rider-wallet.html'" class="w-full flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl text-sm font-bold text-slate-300">
+                <i class="fas fa-wallet text-orange-500 w-5"></i> My Wallet
+            </button>
+            
+            <button onclick="location.href='my-earnings.html'" class="w-full flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl text-sm font-bold text-slate-300">
+                <i class="fas fa-sack-dollar text-green-500 w-5"></i> My Earnings
+            </button>
+
+            <button onclick="logout()" class="w-full flex items-center gap-3 p-4 text-red-400 hover:bg-red-500/10 rounded-2xl text-sm font-bold mt-4">
+                <i class="fas fa-power-off w-5"></i> Logout
+            </button>
+        </div>
+
+        <div class="mt-auto text-center pt-4 border-t border-white/5">
+            <p class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Faster v2.0</p>
+        </div>
+    </aside>
+
+    <header class="flex justify-between items-center mb-10 pt-2">
+        <button onclick="toggleSidebar()" class="w-10 h-10 glass-card rounded-xl flex items-center justify-center text-orange-500">
+            <i class="fas fa-bars-staggered"></i>
+        </button>
+        <div class="flex items-center gap-2">
+            <img id="headerLogo" src="" class="w-10 h-10 brand-logo-gol hidden" alt="Logo">
+            <h1 id="headerText" class="text-xl font-black italic text-orange-500 tracking-tighter">FASTER</h1>
+        </div>
+        <div class="w-10"></div> 
+    </header>
+
+    <div class="flex gap-4">
+        <button onclick="location.href='pending-orders.html'" class="main-btn flex-1 glass-card rounded-[2rem] flex flex-col items-center justify-center text-center p-4">
+            <div class="w-12 h-12 bg-orange-500/10 text-orange-500 rounded-2xl flex items-center justify-center text-xl mb-3">
+                <i class="fas fa-box"></i>
+            </div>
+            <span class="text-[11px] font-black uppercase tracking-tight leading-tight">Pending<br>Orders</span>
+        </button>
+
+        <button onclick="location.href='assigned-orders.html'" class="main-btn flex-1 bg-orange-500 rounded-[2rem] flex flex-col items-center justify-center text-center p-4 text-slate-900 shadow-lg shadow-orange-500/20">
+            <div class="w-12 h-12 bg-slate-900/10 text-slate-900 rounded-2xl flex items-center justify-center text-xl mb-3">
+                <i class="fas fa-motorcycle"></i>
+            </div>
+            <span class="text-[11px] font-black uppercase tracking-tight leading-tight">Assigned<br>Orders</span>
+        </button>
+    </div>
+
+    <script>
+    const SB_URL = "https://hkabhikizdlbavfkualt.supabase.co";
+    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrYWJoaWtpemRsYmF2Zmt1YWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODgyMjUsImV4cCI6MjA5MjA2NDIyNX0.iMlS6-M1aylW8K915LPYDHOg7qUxwu5GelH_CPHLP2U";
+    const _supabase = supabase.createClient(SB_URL, SB_KEY);
+
+    let rider = JSON.parse(localStorage.getItem('riderData'));
+    
+    if(!rider) { window.location.href = 'login.html'; }
+
+    async function loadBranding() {
+        try {
+            const { data } = await _supabase.from('app_settings').select('logo_url').eq('id', 1).single();
+            if(data && data.logo_url) {
+                const hLogo = document.getElementById('headerLogo');
+                const sLogo = document.getElementById('sideLogo');
+                hLogo.src = data.logo_url;
+                hLogo.classList.remove('hidden');
+                document.getElementById('headerText').classList.add('hidden'); 
+                sLogo.src = data.logo_url;
+                sLogo.classList.remove('hidden');
+                document.getElementById('sidebarLogoFallback').classList.add('hidden');
+            }
+        } catch (e) { console.log("Branding error", e); }
+    }
+
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('sidebar-on');
+        document.getElementById('sidebar').classList.toggle('sidebar-off');
+        document.getElementById('overlay').classList.toggle('active');
+    }
+
+    async function toggleShift() {
+        const btn = document.getElementById('shiftBtn');
+        const isOnline = btn.classList.contains('shift-active');
+        const nextStatus = isOnline ? 'inactive' : 'active';
+        updateShiftUI(nextStatus === 'active');
+        const { error } = await _supabase.from('riders').update({ shift_status: nextStatus }).eq('phone', rider.phone);
+        if(!error) {
+            rider.shift_status = nextStatus;
+            localStorage.setItem('riderData', JSON.stringify(rider));
+        }
+    }
+
+    function updateShiftUI(isActive) {
+        const btn = document.getElementById('shiftBtn');
+        const label = document.getElementById('statusLabel');
+        if(isActive) {
+            btn.innerText = "Stop Shift";
+            btn.className = "w-full shift-active py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest";
+            label.innerText = "ONLINE";
+            label.className = "text-[9px] font-black px-2 py-0.5 rounded-full bg-green-500";
+        } else {
+            btn.innerText = "Start Shift";
+            btn.className = "w-full shift-off py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest";
+            label.innerText = "OFFLINE";
+            label.className = "text-[9px] font-black px-2 py-0.5 rounded-full bg-red-500";
+        }
+    }
+
+    function logout() { 
+        if(confirm("Are you sure?")) { localStorage.clear(); window.location.href = 'login.html'; }
+    }
+
+    window.onload = () => {
+        if(rider) {
+            document.getElementById('sideRiderName').innerText = rider.name || "Rider";
+            if(rider.shift_status === 'active') updateShiftUI(true);
+        }
+        loadBranding();
+    };
+    </script>
+</body>
+</html>
