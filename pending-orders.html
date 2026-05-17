@@ -168,14 +168,13 @@
             isModalOpen = false;
         }, 400);
     }
+let redirectUrl = "";
 
-    let shouldRedirect = false;
-
-    // Custom Alert Show karne ka function
-    function showCustomAlert(title, message, isSuccess = false, redirect = false) {
+    // Custom Alert Show karne ka function (Updated)
+    function showCustomAlert(title, message, isSuccess = false, targetUrl = "") {
         document.getElementById('alertTitle').innerText = title;
         document.getElementById('alertMessage').innerText = message;
-        shouldRedirect = redirect;
+        redirectUrl = targetUrl;
         
         const icon = document.getElementById('alertIcon');
         if(isSuccess) {
@@ -188,11 +187,11 @@
         document.getElementById('customAlertModal').classList.remove('hidden');
     }
 
-    // Modal close karne par agar order success tha to next page par bhejega
+    // Modal close karne par agle page par order ID k sath bhejega
     function closeAlertModal() {
         document.getElementById('customAlertModal').classList.add('hidden');
-        if(shouldRedirect) {
-            location.href = 'order-details.html';
+        if(redirectUrl) {
+            location.href = redirectUrl;
         }
     }
 
