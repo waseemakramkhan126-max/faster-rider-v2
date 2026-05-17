@@ -217,6 +217,8 @@
         // Fetch existing pending orders on startup to show current state
         async function loadExistingPending() {
     try {
+        console.log("Supabase se orders fetch ho rahe hain...");
+        
         const { data, error } = await _supabase
             .from('orders')
             .select('*')
@@ -224,28 +226,33 @@
             .order('created_at', { ascending: true })
             .limit(5);
 
+        // Yeh aapko exact data ya error mobile console/inspect mein dikhayega
+        console.log("Supabase Response:", { data, error }); 
+
         if (error) {
-            console.error("Fetch error:", error);
+            console.error("Supabase Query Error:", error.message);
+            checkLoader();
             return;
         }
 
+        checkLoader(); // Kisi bhi haal mein loader ko ab hat jana chahiye
+
         if (data && data.length > 0) {
-            checkLoader(); // Agar data hai toh loader hatao
             data.forEach(order => {
                 addOrderNotification(order, false);
             });
         } else {
-            // Agar koi data NAHI hai tab bhi loader hata kar ek text dikha do
-            checkLoader();
-            feedContainer.innerHTML += `
-                <div class="text-center py-10 opacity-50">
-                    <i class="fas fa-box-open text-2xl text-slate-500 mb-2"></i>
-                    <p class="text-[10px] uppercase tracking-widest">No Pending Orders</p>
+            // Agar koi order pending nahi mila
+            feedContainer.innerHTML = `
+                <div class="text-center py-20 opacity-40 animate-slide-in">
+                    <i class="fas fa-box-open text-3xl text-slate-500 mb-3 block"></i>
+                    <p class="text-xs font-black uppercase tracking-widest">No Active Orders Found</p>
                 </div>
             `;
         }
     } catch (err) {
-        console.error("Startup fetch error:", err);
+        console.error("Startup fetch execution error:", err);
+        checkLoader();
     }
 }
         // Initialize App
