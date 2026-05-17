@@ -94,7 +94,7 @@
 
     <script>
     const SB_URL = "https://hkabhikizdlbavfkualt.supabase.co";
-    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrYWJoaWtpemRsYmF2Zmt1YWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODgyMjUsImV4cCI6MjA5MjA2NDIyNX0.iMlS6-M1aylW8K915LPYDHOg7qUxwu5GelH_CPHLP2U";
+    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkYWJoaWtpemRsYmF2Zmt1YWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODgyMjUsImV4cCI6MjA5MjA2NDIyNX0.iMlS6-M1aylW8K915LPYDHOg7qUxwu5GelH_CPHLP2U";
     const _supabase = supabase.createClient(SB_URL, SB_KEY);
     
     const rider = JSON.parse(localStorage.getItem('riderData'));
@@ -103,20 +103,25 @@
 
     async function fetchOrders() {
         if (isModalOpen) return;
-        const { data, error } = await _supabase
-            .from('orders')
-            .select('*')
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false });
-            
-        if (!error && data) {
-            currentOrders = data;
-            updateOrderList(data);
+        try {
+            const { data, error } = await _supabase
+                .from('orders')
+                .select('*')
+                .eq('status', 'pending')
+                .order('created_at', { ascending: false });
+                
+            if (!error && data) {
+                currentOrders = data;
+                updateOrderList(data);
+            }
+        } catch (e) {
+            console.error("Error fetching orders:", e);
         }
     }
 
     function updateOrderList(orders) {
         const list = document.getElementById('ordersList');
+        if (!list) return;
         if (orders.length === 0) {
             list.innerHTML = `<div class="text-center py-20 opacity-20 font-black uppercase text-xs">No active orders</div>`;
             return;
@@ -143,48 +148,93 @@
     }
 
     function openOrderPreview(id) {
-        const order = currentOrders.find(o => String(o.id) === String(id));
-        if (!order) return;
+        try {
+            const order = currentOrders.find(o => String(o.id) === String(id));
+            if (!order) return;
 
-        isModalOpen = true;
-        document.getElementById('modalName').innerText = order.customer_name || 'Guest User';
-        document.getElementById('modalAddr').innerText = order.delivery_address || 'Location not specified';
-        document.getElementById('modalAvatar').innerText = (order.customer_name || 'C').charAt(0).toUpperCase();
+            isModalOpen = true;
+            
+            // Crash se bachne ke liye safe element selection
+            const elName = document.getElementById('modalName');
+            const elAddr = document.getElementById('modalAddr');
+            const elAvatar = document.getElementById('modalAvatar');
+            const elChatBody = document.getElementById('modalChatBody');
+            const acceptBtn = document.getElementById('mainAcceptBtn');
+            const detailsModal = document.getElementById('detailsModal');
 
-        let contentHTML = '';
-        const details = order.order_details || [];
-        
-        if (details.length === 0) {
-            contentHTML = `<div class="bubble text-[11px] font-bold text-slate-400">No instructions available.</div>`;
-        } else {
-            details.forEach(item => {
-                if (item.type === 'text') {
-                    contentHTML += `
-                        <div class="bubble text-[11px] font-bold text-white leading-relaxed">
-                            ${item.value}
-                        </div>`;
-                } else if (item.type === 'voice') {
-                    contentHTML += `
-                        <div class="bubble w-full max-w-[260px]">
-                            <audio controls class="w-full opacity-80" src="${item.value}"></audio>
-                        </div>`;
+            if (elName) elName.innerText = order.customer_name || 'Guest User';
+            if (elAddr) elAddr.innerText = order.delivery_address || 'Location not specified';
+            if (elAvatar) elAvatar.innerText = (order.customer_name || 'C').charAt(0).toUpperCase();
+
+            let contentHTML = '';
+            let detailsArray = [];
+            
+            // Type validation check (String vs Array handling protection)
+            if (order.order_details) {
+                if (Array.isArray(order.order_details)) {
+                    detailsArray = order.order_details;
+                } else if (typeof order.order_details === 'string') {
+                    try {
+                        if (order.order_details.trim().startsWith('[')) {
+                            detailsArray = JSON.parse(order.order_details);
+                        } else {
+                            detailsArray = [{ type: 'text', value: order.order_details }];
+                        }
+                    } catch (e) {
+                        detailsArray = [{ type: 'text', value: order.order_details }];
+                    }
+                } else {
+                    detailsArray = [{ type: 'text', value: String(order.order_details) }];
                 }
-            });
+            }
+
+            if (detailsArray.length === 0) {
+                contentHTML = `<div class="bubble text-[11px] font-bold text-slate-400">No instructions available.</div>`;
+            } else {
+                detailsArray.forEach(item => {
+                    if (item && item.type === 'text') {
+                        contentHTML += `
+                            <div class="bubble text-[11px] font-bold text-white leading-relaxed">
+                                ${item.value || ''}
+                            </div>`;
+                    } else if (item && item.type === 'voice') {
+                        contentHTML += `
+                            <div class="bubble w-full max-w-[260px]">
+                                <audio controls class="w-full opacity-80" src="${item.value || ''}"></audio>
+                            </div>`;
+                    } else if (item && item.value) {
+                        contentHTML += `
+                            <div class="bubble text-[11px] font-bold text-white leading-relaxed">
+                                ${item.value}
+                            </div>`;
+                    } else if (typeof item === 'string') {
+                        contentHTML += `
+                            <div class="bubble text-[11px] font-bold text-white leading-relaxed">
+                                ${item}
+                            </div>`;
+                    }
+                });
+            }
+
+            if (elChatBody) elChatBody.innerHTML = contentHTML;
+
+            if (acceptBtn) {
+                acceptBtn.onclick = function() {
+                    acceptThisOrder(order.id);
+                };
+            }
+
+            if (detailsModal) {
+                detailsModal.classList.add('active');
+            }
+        } catch (err) {
+            console.error("Error in openOrderPreview:", err);
         }
-
-        document.getElementById('modalChatBody').innerHTML = contentHTML;
-
-        // Button action setup with correct order id
-        const acceptBtn = document.getElementById('mainAcceptBtn');
-        acceptBtn.onclick = function() {
-            acceptThisOrder(order.id);
-        };
-
-        document.getElementById('detailsModal').classList.add('active');
     }
 
     function closeModal() {
-        document.getElementById('detailsModal').classList.remove('active');
+        const detailsModal = document.getElementById('detailsModal');
+        if (detailsModal) detailsModal.classList.remove('active');
         setTimeout(() => {
             isModalOpen = false;
             fetchOrders();
@@ -198,6 +248,8 @@
         }
 
         const btn = document.getElementById('mainAcceptBtn');
+        if (!btn) return;
+
         const riderData = JSON.parse(localStorage.getItem('riderData'));
         const rPhone = riderData ? (riderData.phone || riderData.rider_phone) : null;
         const rId = riderData ? riderData.rider_id : null;
@@ -207,7 +259,6 @@
             return;
         }
 
-        // Processing state on
         btn.disabled = true;
         btn.innerHTML = `<i class="fas fa-circle-notch animate-spin"></i> Processing...`;
 
@@ -228,7 +279,6 @@
 
             showCustomAlert("Success", "Order Accepted Successfully!", true);
             
-            // Redirect after custom alert display
             setTimeout(() => {
                 location.href = `order-details.html?id=${orderId}`;
             }, 1200);
@@ -242,29 +292,36 @@
     }
 
     function showCustomAlert(title, message, isSuccess) {
-        document.getElementById('alertTitle').innerText = title;
-        document.getElementById('alertMessage').innerText = message;
-        
+        const alertTitle = document.getElementById('alertTitle');
+        const alertMessage = document.getElementById('alertMessage');
         const iconDiv = document.getElementById('alertIcon');
-        if (isSuccess) {
-            iconDiv.className = "w-16 h-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center text-2xl mx-auto mb-4 border border-green-500/20";
-            iconDiv.innerHTML = `<i class="fas fa-check-circle"></i>`;
-        } else {
-            iconDiv.className = "w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center text-2xl mx-auto mb-4 border border-red-500/20";
-            iconDiv.innerHTML = `<i class="fas fa-times-circle"></i>`;
+        const customAlertModal = document.getElementById('customAlertModal');
+
+        if (alertTitle) alertTitle.innerText = title;
+        if (alertMessage) alertMessage.innerText = message;
+        
+        if (iconDiv) {
+            if (isSuccess) {
+                iconDiv.className = "w-16 h-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center text-2xl mx-auto mb-4 border border-green-500/20";
+                iconDiv.innerHTML = `<i class="fas fa-check-circle"></i>`;
+            } else {
+                iconDiv.className = "w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center text-2xl mx-auto mb-4 border border-red-500/20";
+                iconDiv.innerHTML = `<i class="fas fa-times-circle"></i>`;
+            }
         }
         
-        document.getElementById('customAlertModal').classList.remove('hidden');
+        if (customAlertModal) customAlertModal.classList.remove('hidden');
     }
 
     function closeAlertModal() {
-        document.getElementById('customAlertModal').classList.add('hidden');
+        const customAlertModal = document.getElementById('customAlertModal');
+        if (customAlertModal) customAlertModal.classList.add('hidden');
     }
 
     // Initial load
     fetchOrders();
 
-    // Clean Realtime listener without syntax error
+    // Clean Realtime listener
     _supabase.channel('live-pending-orders')
         .on('postgres_changes', { 
             event: '*', 
