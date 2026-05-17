@@ -415,7 +415,8 @@ async function finishOrderAction() {
 
 
 // . Phir sirf is specific order ke liye Supabase Realtime active kar dein
-if (orderId) {
+if (orderId) { 
+        fetchOrderDetails();
     _supabase.channel(`live-order-${orderId}`)
         .on('postgres_changes', { 
             event: 'UPDATE', // Jab bhi database me data update ho
