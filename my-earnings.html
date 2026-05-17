@@ -93,7 +93,22 @@
 
         async function initEarnings() {
             if (!riderPhone) return;
-            calculateEarnings();
+            calculateEarnings(); // Initial load
+
+            // Realtime listener to update earnings live
+            _supabase.channel('live-earnings')
+                .on('postgres_changes', { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'orders',
+                    filter: `rider_phone=eq.${riderPhone}` 
+                }, (payload) => {
+                    // Agar order complete hua hai toh earnings dobara calculate kare
+                    if (payload.new.status === 'completed') {
+                        calculateEarnings();
+                    }
+                })
+                .subscribe();
         }
 
         async function calculateEarnings() {
