@@ -25,7 +25,7 @@ audio { filter: sepia(20%) saturate(70%) grayscale(1) contrast(90%) invert(100%)
 <body class="flex flex-col h-screen overflow-hidden">
 
 <header class="p-3 flex items-center justify-between bg-[#202c33] border-b border-white/5 sticky top-0 z-50">
-    <button onclick="location.href='assigned-orders.html'" class="text-slate-400 text-xl w-10 active:scale-90 transition-all">
+    <button onclick="location.href='index.html'" class="text-slate-400 text-xl w-10 active:scale-90 transition-all">
         <i class="fas fa-arrow-left"></i>
     </button>
 
@@ -316,6 +316,7 @@ async function updateRiderStatus(s){
     window.location.reload(); 
 }
 
+// --- NEW 100% BULLETPROOF FINISH ORDER LOGIC WITH DUAL WALLET SYNC ---
 async function finishOrderAction() {
     const cash = await customPrompt(`Enter Received Amount`, currentOrderData.bill_amount);
     if(cash === null || cash.trim() === "") return;
@@ -324,6 +325,46 @@ async function finishOrderAction() {
     const bal = parseFloat(currentOrderData.bill_amount) - paid;
 
     try {
+        // 1. Fetch Fixed Fees
+        const { data: settings, error: setErr } = await _supabase
+            .from('app_settings')
+            .select('customer_delivery_fee, rider_commission')
+            .eq('id', 1).single();
+            
+        if (setErr) throw new Error("Settings fetch fail: " + setErr.message);
+
+        const riderCut = parseFloat(settings.rider_commission || 0);
+
+        // 🔥 NAYA FORMULA: Asal Hisaab (Cash in Hand)
+        const itemPrice = parseFloat(currentOrderData.item_price || 0);
+        const riderTotalHaqq = itemPrice + riderCut; // Rider ka apna paisa (Saman + Commission)
+        const netOwedToOffice = paid - riderTotalHaqq; // Total Cash minus Rider Ka Paisa = Office ko dene wale paise
+
+        // 2. Sync RIDER'S WALLET
+        const rPhone = currentOrderData.rider_phone;
+        if(!rPhone) throw new Error("Rider Phone Missing");
+
+        let { data: rWallet, error: rWalErr } = await _supabase
+            .from('rider_wallets')
+            .select('balance')
+            .eq('rider_phone', rPhone)
+            .maybeSingle();
+
+        let currentRiderBalance = 0;
+        if (rWallet) { currentRiderBalance = parseFloat(rWallet.balance || 0); }
+        
+        // Puraana hisaab + Naya hisaab
+        const newRiderBalance = currentRiderBalance + netOwedToOffice;
+
+        if (rWallet) {
+            const { error: rwUpdateErr } = await _supabase.from('rider_wallets').update({ balance: newRiderBalance, updated_at: new Date().toISOString() }).eq('rider_phone', rPhone);
+            if (rwUpdateErr) throw new Error("Rider Wallet Update Fail");
+        } else {
+            const { error: rwInsertErr } = await _supabase.from('rider_wallets').insert([{ rider_phone: rPhone, balance: newRiderBalance, updated_at: new Date().toISOString() }]);
+            if (rwInsertErr) throw new Error("Rider Wallet Create Fail");
+        }
+
+        // 3. Mark Order Completed
         const { error: orderErr } = await _supabase.from('orders').update({ 
             status: 'completed', 
             rider_status: 'Delivered', 
@@ -334,6 +375,7 @@ async function finishOrderAction() {
 
         if (orderErr) throw new Error("Orders Table Error: " + orderErr.message);
 
+        // 4. Sync CUSTOMER'S WALLET
         const { data: existingWallet, error: fetchErr } = await _supabase
             .from('wallets')
             .select('id')
@@ -348,7 +390,7 @@ async function finishOrderAction() {
                 updated_at: new Date().toISOString() 
             }).eq('customer_phone', currentOrderData.customer_phone);
             
-            if (updateErr) throw new Error("Wallets Update Error: " + updateErr.message);
+            if (updateErr) throw new Error("Customer Wallet Update Error: " + updateErr.message);
         } else {
             const { error: insertErr } = await _supabase.from('wallets').insert([{ 
                 customer_phone: currentOrderData.customer_phone,
@@ -356,20 +398,36 @@ async function finishOrderAction() {
                 updated_at: new Date().toISOString() 
             }]);
             
-            if (insertErr) throw new Error("Wallets Insert Error: " + insertErr.message);
+            if (insertErr) throw new Error("Customer Wallet Insert Error: " + insertErr.message);
         }
 
+        // 5. Update Customer Database Profile
         await _supabase.from('customers').update({ wallet_balance: bal }).eq('phone', currentOrderData.customer_phone);
 
-        await customAlert("✅ Order Delivered Successsfully And Wallet updated!");
-        location.href = 'assigned-orders.html';
+        // All Synced
+        await customAlert("✅ Order Delivered Successfully & All Wallets Synced!");
+        location.href = 'index.html';
 
     } catch (err) {
-        await customAlert("❌ Data Saving Failed: " + err.message);
+        await customAlert("❌ Error during financial sync: " + err.message);
     }
 }
 
-fetchOrderDetails();
+
+// . Phir sirf is specific order ke liye Supabase Realtime active kar dein
+if (orderId) {
+    _supabase.channel(`live-order-${orderId}`)
+        .on('postgres_changes', { 
+            event: 'UPDATE', // Jab bhi database me data update ho
+            schema: 'public', 
+            table: 'orders',
+            filter: `id=eq.${orderId}` // Sirf isi order ka data check kare
+        }, (payload) => {
+            console.log("Database updated in realtime!", payload.new);
+            fetchOrderDetails(); // Sirf tabhi screen update hogi jab sach me koi change aayega
+        })
+        .subscribe();
+}
 </script>
 </body>
 </html>
