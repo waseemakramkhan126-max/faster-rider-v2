@@ -94,7 +94,7 @@
 
     <script>
     const SB_URL = "https://hkabhikizdlbavfkualt.supabase.co";
-    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkYWJoaWtpemRsYmF2Zmt1YWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODgyMjUsImV4cCI6MjA5MjA2NDIyNX0.iMlS6-M1aylW8K915LPYDHOg7qUxwu5GelH_CPHLP2U";
+    const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrYWJoaWtpemRsYmF2Zmt1YWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODgyMjUsImV4cCI6MjA5MjA2NDIyNX0.iMlS6-M1aylW8K915LPYDHOg7qUxwu5GelH_CPHLP2U";
     const _supabase = supabase.createClient(SB_URL, SB_KEY);
     
     const rider = JSON.parse(localStorage.getItem('riderData'));
@@ -103,6 +103,10 @@
 
     async function fetchOrders() {
         if (isModalOpen) return;
+        
+        // Dono me se jo bhi ID page me maujood ho use safe select karega
+        const listContainer = document.getElementById('ordersList') || document.getElementById('list');
+        
         try {
             const { data, error } = await _supabase
                 .from('orders')
@@ -110,22 +114,36 @@
                 .eq('status', 'pending')
                 .order('created_at', { ascending: false });
                 
-            if (!error && data) {
+            if (error) {
+                console.error("Supabase Error:", error);
+                if (listContainer) {
+                    listContainer.innerHTML = `<div class="text-center py-20 text-red-500 text-xs font-bold uppercase tracking-wider">Error: ${error.message}</div>`;
+                }
+                return;
+            }
+
+            if (data) {
                 currentOrders = data;
                 updateOrderList(data);
             }
         } catch (e) {
-            console.error("Error fetching orders:", e);
+            console.error("Crash Error:", e);
+            if (listContainer) {
+                listContainer.innerHTML = `<div class="text-center py-20 text-red-500 text-xs font-bold uppercase tracking-wider">Crash: ${e.message}</div>`;
+            }
         }
     }
 
     function updateOrderList(orders) {
-        const list = document.getElementById('ordersList');
+        // ID safe handling
+        const list = document.getElementById('ordersList') || document.getElementById('list');
         if (!list) return;
+        
         if (orders.length === 0) {
-            list.innerHTML = `<div class="text-center py-20 opacity-20 font-black uppercase text-xs">No active orders</div>`;
+            list.innerHTML = `<div class="text-center py-20 opacity-20 font-black uppercase text-xs tracking-widest">No active orders</div>`;
             return;
         }
+        
         list.innerHTML = orders.map(o => `
             <div onclick="openOrderPreview('${o.id}')" class="order-card p-5 rounded-[2.2rem] flex flex-col gap-3">
                 <div class="flex items-center justify-between">
@@ -154,7 +172,6 @@
 
             isModalOpen = true;
             
-            // Crash se bachne ke liye safe element selection
             const elName = document.getElementById('modalName');
             const elAddr = document.getElementById('modalAddr');
             const elAvatar = document.getElementById('modalAvatar');
@@ -169,7 +186,6 @@
             let contentHTML = '';
             let detailsArray = [];
             
-            // Type validation check (String vs Array handling protection)
             if (order.order_details) {
                 if (Array.isArray(order.order_details)) {
                     detailsArray = order.order_details;
