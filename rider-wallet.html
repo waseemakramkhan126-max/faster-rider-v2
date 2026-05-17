@@ -11,7 +11,9 @@
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; }
         .rider-card { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); transition: 0.3s; }
-        .ledger-card { transition: transform 0.2s; border-left: 4px solid #e2e8f0; }
+        .last-order-box { background: white; border-radius: 2rem; border: 1px solid #e2e8f0; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); }
+        .animate-pop { animation: pop 0.3s ease-out; }
+        @keyframes pop { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     </style>
 </head>
 <body class="flex flex-col min-h-screen">
@@ -22,7 +24,7 @@
     </header>
 
     <main class="flex-1 p-5 max-w-md mx-auto w-full">
-        <div id="balanceCard" class="rider-card rounded-[2.5rem] p-8 text-white shadow-2xl mb-8 relative overflow-hidden">
+        <div id="balanceCard" class="rider-card rounded-[2.5rem] p-8 text-white shadow-2xl mb-6 relative overflow-hidden">
             <div class="relative z-10">
                 <p id="balanceLabel" class="text-[10px] opacity-60 uppercase tracking-[0.2em] font-black mb-1">Net Office Balance</p>
                 <h2 id="balanceAmount" class="text-5xl font-extrabold mb-4 tracking-tighter">Rs. 0</h2>
@@ -33,9 +35,15 @@
             <i class="fas fa-file-invoice-dollar absolute -right-8 -bottom-8 text-white/5 text-[10rem] -rotate-12"></i>
         </div>
 
+        <div id="lastOrderSection" class="hidden animate-pop mb-8">
+            <h3 class="font-black text-gray-400 uppercase text-[9px] tracking-[0.2em] mb-3 ml-2">Last Order Activity</h3>
+            <div id="lastOrderDetails" class="last-order-box p-6">
+                </div>
+        </div>
+
         <div class="flex items-center justify-between mb-4 px-2">
-            <h3 class="font-black text-gray-800 uppercase text-[10px] tracking-widest">Orders Pending Settlement</h3>
-            <span class="text-[9px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-md font-bold uppercase">Unsettled</span>
+            <h3 class="font-black text-gray-800 uppercase text-[10px] tracking-widest">Unsettled Orders List</h3>
+            <span class="text-[9px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-md font-bold uppercase">History</span>
         </div>
 
         <div id="transactionList" class="space-y-4 pb-10">
@@ -53,15 +61,9 @@
         const riderPhone = (localStorage.getItem('rider_phone') || "").trim();
 
         async function initWallet() {
-            if (!riderPhone) {
-                alert("❌ Rider phone not found!");
-                return;
-            }
+            if (!riderPhone) return;
             fetchLedger();
-
-            _supabase.channel('custom-all-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchLedger)
-            .subscribe();
+            _supabase.channel('wallet-updates').on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchLedger).subscribe();
         }
 
         async function fetchLedger() {
@@ -73,87 +75,103 @@
                     .from('orders')
                     .select('*')
                     .eq('rider_phone', riderPhone)
-                    .eq('is_settled', false)
-                    .eq('status', 'completed');
+                    .eq('status', 'completed')
+                    .order('updated_at', { ascending: false }); // Latest first
 
                 if (error) throw error;
 
-                let finalNetForOffice = 0;
-                let listHtml = "";
-
                 if (orders.length === 0) {
-                    document.getElementById('transactionList').innerHTML = `<div class="text-center py-20 opacity-40"><i class="fas fa-check-circle text-4xl mb-3 text-green-500"></i><p class="text-xs font-bold uppercase">All Clear! ✅</p></div>`;
+                    document.getElementById('transactionList').innerHTML = `<div class="text-center py-10 opacity-40"><p class="text-xs font-bold uppercase">No orders found</p></div>`;
                     updateUI(0);
                     return;
                 }
 
-                for (const o of orders) {
+                // 1. Logic for Last Order Details (Green Card ke neeche wala box)
+                const last = orders[0];
+                const lastItemPlusDc = parseFloat(last.item_price || 0) + parseFloat(last.dc_amount || 0);
+                const lastPending = parseFloat(last.balance_amount || 0);
+                
+                document.getElementById('lastOrderSection').classList.remove('hidden');
+                document.getElementById('lastOrderDetails').innerHTML = `
+                    <div class="flex justify-between items-start mb-4 border-b border-gray-50 pb-3">
+                        <div>
+                            <p class="text-[10px] font-black text-blue-600 uppercase tracking-tighter">Order ID: #${last.id.toString().slice(-6)}</p>
+                            <h4 class="text-lg font-black text-gray-800 leading-tight">${last.customer_name}</h4>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[9px] text-gray-400 font-bold uppercase">${new Date(last.updated_at).toLocaleDateString()}</p>
+                            <p class="text-[9px] text-gray-400 font-bold uppercase">${new Date(last.updated_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div class="flex items-start gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-100 mb-4">
+                            <i class="fas fa-map-marker-alt text-red-500 mt-1"></i>
+                            <p class="text-[11px] font-bold text-gray-600 leading-relaxed">${last.delivery_address || 'N/A'}</p>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-blue-50/50 p-3 rounded-2xl border border-blue-100">
+                                <p class="text-[9px] font-black text-blue-400 uppercase mb-1">Item + DC</p>
+                                <p class="text-sm font-black text-gray-800">Rs. ${lastItemPlusDc}</p>
+                            </div>
+                            <div class="bg-emerald-50/50 p-3 rounded-2xl border border-emerald-100">
+                                <p class="text-[9px] font-black text-emerald-500 uppercase mb-1">Received Cash</p>
+                                <p class="text-sm font-black text-emerald-700">Rs. ${last.final_amount || 0}</p>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center bg-slate-900 text-white p-4 rounded-2xl shadow-lg mt-2">
+                             <div>
+                                <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Customer Pending</p>
+                                <p class="text-lg font-black ${lastPending > 0 ? 'text-red-400' : 'text-emerald-400'}">Rs. ${Math.abs(lastPending)}</p>
+                             </div>
+                             <div class="h-8 w-[1px] bg-white/10"></div>
+                             <div class="text-right">
+                                <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Status</p>
+                                <p class="text-xs font-black uppercase text-orange-400">Delivered</p>
+                             </div>
+                        </div>
+                    </div>
+                `;
+
+                // 2. Logic for Financial Ledger (All Unsettled)
+                let finalNetForOffice = 0;
+                let listHtml = "";
+                const unsettledOrders = orders.filter(o => o.is_settled === false);
+
+                for (const o of unsettledOrders) {
                     const itemPrice = parseFloat(o.item_price || 0);
                     const dc = parseFloat(o.dc_amount || 0);
                     const collected = parseFloat(o.final_amount || 0);
-
-                    // Naya Theek Code (Is se replace kar dein):
-const { data: wallet } = await _supabase
-    .from('wallets')
-    .select('current_balance')
-    .eq('phone_number', o.customer_phone) 
-    .single();
-
-                    const prevBal = parseFloat(wallet?.current_balance || 0);
-                    const totalBillExpected = itemPrice + dc + prevBal;
-
+                    
                     const riderTotalHaqq = itemPrice + riderCommConstant;
                     const netToOffice = collected - riderTotalHaqq;
-
                     finalNetForOffice += netToOffice;
 
                     listHtml += `
-                        <div class="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm ledger-card ${netToOffice >= 0 ? 'border-l-rose-500' : 'border-l-emerald-500'}">
-                            <div class="flex justify-between items-start mb-2">
+                        <div class="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-2xl flex items-center justify-center ${netToOffice >= 0 ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-500'}">
+                                    <i class="fas ${netToOffice >= 0 ? 'fa-arrow-up' : 'fa-arrow-down'} text-xs"></i>
+                                </div>
                                 <div>
-                                    <p class="text-[10px] font-black text-gray-400 uppercase">Order #${o.id.toString().slice(-5)}</p>
-                                    <h4 class="text-xs font-bold text-slate-800">${o.customer_name}</h4>
-                                </div>
-                                <div class="text-right">
-                                    <span class="text-[7px] font-black px-2 py-0.5 rounded-full ${netToOffice >= 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'} uppercase">
-                                        ${netToOffice >= 0 ? 'To Office' : 'From Office'}
-                                    </span>
+                                    <h4 class="text-[11px] font-black text-gray-800 uppercase">Order #${o.id.toString().slice(-5)}</h4>
+                                    <p class="text-[9px] text-gray-400 font-bold">${o.customer_name}</p>
                                 </div>
                             </div>
-
-                            <div class="grid grid-cols-2 gap-y-1 gap-x-4 text-[9px] font-bold text-slate-500 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                                <div class="flex justify-between"><span>Item:</span> <span class="text-slate-900">Rs. ${itemPrice}</span></div>
-                                <div class="flex justify-between"><span>DC:</span> <span class="text-slate-900">Rs. ${dc}</span></div>
-                                <div class="flex justify-between ${prevBal >= 0 ? 'text-rose-500' : 'text-emerald-600'}">
-                                    <span>Wallet:</span> <span>${prevBal >= 0 ? '+' : ''}${prevBal}</span>
-                                </div>
-                                <div class="flex justify-between text-blue-600 border-l pl-2 border-slate-200">
-                                    <span>Bill:</span> <span>Rs. ${totalBillExpected}</span>
-                                </div>
-                            </div>
-
-                            <div class="mt-3 flex justify-between items-end">
-                                <div class="text-[9px] font-bold text-slate-400">
-                                    <p>Cash Recv: <span class="text-slate-700">Rs. ${collected}</span></p>
-                                    <p>My Haqq: <span class="text-blue-600">Rs. ${riderTotalHaqq}</span></p>
-                                </div>
-                                <div class="text-right">
-                                    <p class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">Amount</p>
-                                    <p class="text-base font-black ${netToOffice >= 0 ? 'text-rose-600' : 'text-emerald-600'}">
-                                        Rs. ${Math.abs(netToOffice)}
-                                    </p>
-                                </div>
+                            <div class="text-right">
+                                <p class="text-sm font-black ${netToOffice >= 0 ? 'text-red-600' : 'text-green-600'}">Rs. ${Math.abs(netToOffice)}</p>
+                                <p class="text-[8px] font-black text-gray-300 uppercase">${netToOffice >= 0 ? 'Pay Office' : 'Collect'}</p>
                             </div>
                         </div>
                     `;
                 }
 
-                document.getElementById('transactionList').innerHTML = listHtml;
+                document.getElementById('transactionList').innerHTML = listHtml || `<p class="text-center py-10 text-[10px] font-bold text-gray-400 uppercase">No pending settlements</p>`;
                 updateUI(finalNetForOffice);
 
-            } catch (err) {
-                console.error("Ledger Error:", err);
-            }
+            } catch (err) { console.error("Ledger Error:", err); }
         }
 
         function updateUI(balance) {
@@ -161,9 +179,7 @@ const { data: wallet } = await _supabase
             const badge = document.getElementById('statusBadge');
             const label = document.getElementById('balanceLabel');
             const card = document.getElementById('balanceCard');
-
             amtEl.innerText = `Rs. ${Math.abs(balance).toLocaleString()}`;
-
             if (balance > 0) {
                 badge.innerText = "Cash in Hand (Office Debt)";
                 label.innerText = "Submit to Office";
@@ -178,7 +194,6 @@ const { data: wallet } = await _supabase
                 card.style.background = "linear-gradient(135deg, #0f172a 0%, #334155 100%)";
             }
         }
-
         window.onload = initWallet;
     </script>
 </body>
