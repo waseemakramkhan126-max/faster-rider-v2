@@ -138,107 +138,97 @@
     }
 
     function openOrderPreview(id) {
-        const order = currentOrders.find(o => String(o.id) === String(id));
-        if (!order) return;
+    const order = currentOrders.find(o => String(o.id) === String(id));
+    if (!order) return;
 
-        isModalOpen = true;
-        document.getElementById('modalName').innerText = order.customer_name || 'Guest User';
-        document.getElementById('modalAddr').innerText = order.delivery_address || 'Location not specified';
-        document.getElementById('modalAvatar').innerText = (order.customer_name || 'C').charAt(0).toUpperCase();
+    isModalOpen = true;
+    document.getElementById('modalName').innerText = order.customer_name || 'Guest User';
+    document.getElementById('modalAddr').innerText = order.delivery_address || 'Location not specified';
+    document.getElementById('modalAvatar').innerText = (order.customer_name || 'C').charAt(0).toUpperCase();
 
-        let contentHTML = '';
-        const details = order.order_details || order.text_content;
-        if(details) contentHTML += `<div class="bubble text-white text-sm shadow-sm">${details}</div>`;
-        if(order.voice_url) contentHTML += `<div class="bubble shadow-sm"><audio controls class="w-full"><source src="${order.voice_url}" type="audio/mpeg"></audio></div>`;
-        if(order.image_url) contentHTML += `<div class="bubble p-1 shadow-sm"><img src="${order.image_url}" class="rounded-xl w-full h-auto border border-white/5" onclick="window.open(this.src)"></div>`;
-
-        document.getElementById('modalChatBody').innerHTML = contentHTML;
-        document.getElementById('mainAcceptBtn').onclick = () => acceptThisOrder(order.id);
-
-        const modal = document.getElementById('detailsModal');
-        modal.style.display = 'flex';
-        setTimeout(() => modal.classList.add('active'), 10);
+    let contentHTML = '';
+    const details = order.order_details || [];
+    
+    if (details.length === 0) {
+        contentHTML = `<div class="bubble text-[11px] font-bold text-slate-400">No instructions available.</div>`;
+    } else {
+        details.forEach(item => {
+            if (item.type === 'text') {
+                contentHTML += `
+                    <div class="bubble text-[11px] font-bold text-white leading-relaxed">
+                        ${item.value}
+                    </div>`;
+            } else if (item.type === 'voice') {
+                contentHTML += `
+                    <div class="bubble w-full max-w-[260px]">
+                        <audio controls class="w-full opacity-80" src="${item.value}"></audio>
+                    </div>`;
+            }
+        });
     }
 
-    function closeModal() {
-        const modal = document.getElementById('detailsModal');
-        modal.classList.remove('active');
-        setTimeout(() => {
-            modal.style.display = 'none';
-            isModalOpen = false;
-        }, 400);
-    }
-let redirectUrl = "";
+    document.getElementById('modalChatBody').innerHTML = contentHTML;
 
-    // Custom Alert Show karne ka function (Updated)
-    function showCustomAlert(title, message, isSuccess = false, targetUrl = "") {
-        document.getElementById('alertTitle').innerText = title;
-        document.getElementById('alertMessage').innerText = message;
-        redirectUrl = targetUrl;
-        
-        const icon = document.getElementById('alertIcon');
-        if(isSuccess) {
-            icon.className = "w-16 h-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center text-2xl mx-auto mb-4 border border-green-500/20";
-            icon.innerHTML = '<i class="fas fa-check-circle"></i>';
-        } else {
-            icon.className = "w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center text-2xl mx-auto mb-4 border border-red-500/20";
-            icon.innerHTML = '<i class="fas fa-exclamation-circle"></i>';
-        }
-        document.getElementById('customAlertModal').classList.remove('hidden');
+    // 👈 IMPORTANT FIX: Button par click karne par sahi id pass ho rahi hai
+    const acceptBtn = document.getElementById('mainAcceptBtn');
+    acceptBtn.onclick = function() {
+        acceptThisOrder(order.id);
+    };
+
+    document.getElementById('detailsModal').classList.add('active');
+}
+
+// Updated accept order function with smooth redirection and button reset
+async function acceptThisOrder(orderId) {
+    const btn = document.getElementById('mainAcceptBtn');
+    const riderData = JSON.parse(localStorage.getItem('riderData'));
+    
+    const rPhone = riderData ? (riderData.phone || riderData.rider_phone) : null;
+    const rId = riderData ? riderData.rider_id : null;
+
+    if (!rPhone) {
+        showCustomAlert("Error", "Rider phone not found! Please Login again.", false);
+        return;
     }
 
-    // Modal close karne par agle page par order ID k sath bhejega
-    function closeAlertModal() {
-        document.getElementById('customAlertModal').classList.add('hidden');
-        if(redirectUrl) {
-            location.href = redirectUrl;
-        }
+    if (!orderId) {
+        showCustomAlert("Error", "Invalid Order ID!", false);
+        return;
     }
 
-    // Updated accept order function bina kisi alert() ke
-    async function acceptThisOrder(orderId) {
-        const btn = document.getElementById('mainAcceptBtn');
-        const riderData = JSON.parse(localStorage.getItem('riderData'));
-        
-        const rPhone = riderData ? (riderData.phone || riderData.rider_phone) : null;
-        const rId = riderData ? riderData.rider_id : null;
+    // Button ko processing state par lagayein
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fas fa-circle-notch animate-spin"></i> Processing...`;
 
-        if (!rPhone) {
-            showCustomAlert("Error", "Rider phone not found! Please Login again.", false);
-            return;
-        }
+    try {
+        const { error } = await _supabase
+            .from('orders')
+            .update({ 
+                status: 'assigned', 
+                rider_phone: rPhone, 
+                rider_id: rId,
+                rider_status: 'Accepted',
+                assigned_at: new Date().toISOString() 
+            })
+            .eq('id', orderId)
+            .eq('status', 'pending');
 
-        btn.disabled = true;
-        btn.innerHTML = `<i class="fas fa-circle-notch animate-spin"></i> Processing...`;
+        if (error) throw error;
 
-        try {
-            const { error } = await _supabase
-                .from('orders')
-                .update({ 
-                    status: 'assigned', 
-                    rider_phone: rPhone, 
-                    rider_id: rId,
-                    rider_status: 'Accepted',
-                    assigned_at: new Date().toISOString() 
-                })
-                .eq('id', orderId)
-                .eq('status', 'pending');
+        // Button ko wapas stable karein aur success show karein
+        btn.innerHTML = "Confirm & Accept Order";
+        btn.disabled = false;
 
-            if (error) throw error;
+        // Success message ke saath specific Order ID page par redirect karein
+        showCustomAlert("Success", "Order Accepted Successfully!", true, `order-details.html?id=${orderId}`);
 
-            // Background button ko wapas normal karein
-            btn.innerHTML = "Confirm & Accept Order";
-            btn.disabled = false;
-
-            // Success Popup dikhayega aur OK dabaane par ID k sath redirection hogi
-            showCustomAlert("Success", "Order Accepted Successfully!", true, `order-details.html?id=${orderId}`);
-
-        } catch (err) {
-            showCustomAlert("Error", "Could not accept order: " + err.message, false);
-            btn.disabled = false;
-            btn.innerHTML = "Confirm & Accept Order";
-        }
+    } catch (err) {
+        console.error("Error accepting order:", err);
+        showCustomAlert("Error", "Could not accept order: " + err.message, false);
+        btn.disabled = false;
+        btn.innerHTML = "Confirm & Accept Order";
     }
+}
     fetchOrders(); // Initial load
     
     // Realtime listener for new pending orders
