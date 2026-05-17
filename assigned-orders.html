@@ -55,8 +55,22 @@
                 </div>
             `).join('');
         }
-        load();
-        setInterval(load, 5000); // Har 5 second baad list refresh hogi
+        load(); // Initial load
+
+        // Realtime listener for assigned tasks
+        if (rider && rider.rider_id) {
+            _supabase.channel('live-assigned-tasks')
+                .on('postgres_changes', { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'orders',
+                    filter: `rider_id=eq.${rider.rider_id}` // Sirf is specific rider ke orders sune
+                }, (payload) => {
+                    console.log("Assigned task update:", payload);
+                    load(); // List refresh kare
+                })
+                .subscribe();
+        }
     </script>
 </body>
 </html>
