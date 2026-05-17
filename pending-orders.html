@@ -226,8 +226,12 @@ let redirectUrl = "";
 
             if (error) throw error;
 
-            // Success Popup dikhayega aur OK dabaane par redirection hogi
-            showCustomAlert("Success", "Order Accepted Successfully!", true, true);
+            // Background button ko wapas normal karein
+            btn.innerHTML = "Confirm & Accept Order";
+            btn.disabled = false;
+
+            // Success Popup dikhayega aur OK dabaane par ID k sath redirection hogi
+            showCustomAlert("Success", "Order Accepted Successfully!", true, `order-details.html?id=${orderId}`);
 
         } catch (err) {
             showCustomAlert("Error", "Could not accept order: " + err.message, false);
