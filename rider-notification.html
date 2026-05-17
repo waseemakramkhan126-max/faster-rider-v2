@@ -216,25 +216,36 @@
 
         // Fetch existing pending orders on startup to show current state
         async function loadExistingPending() {
-            try {
-                const { data, error } = await _supabase
-                    .from('orders')
-                    .select('*')
-                    .eq('status', 'pending')
-                    .order('created_at', { ascending: true })
-                    .limit(5);
+    try {
+        console.log("Fetching orders from Supabase..."); 
+        
+        const { data, error } = await _supabase
+            .from('orders')
+            .select('*')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: true })
+            .limit(5);
 
-                if (!error && data && data.length > 0) {
-                    checkLoader();
-                    data.forEach(order => {
-                        addOrderNotification(order, false);
-                    });
-                }
-            } catch (err) {
-                console.error("Startup fetch error:", err);
-            }
+        // Yeh log aapko exact problem batayega
+        console.log("Supabase Response:", { data, error }); 
+
+        if (error) {
+            console.error("Supabase Error:", error.message);
+            return;
         }
 
+        if (data && data.length > 0) {
+            checkLoader();
+            data.forEach(order => {
+                addOrderNotification(order, false);
+            });
+        } else {
+            console.log("Query run hui, par koi pending order nahi mila.");
+        }
+    } catch (err) {
+        console.error("Startup fetch error:", err);
+    }
+}
         // Initialize App
         window.onload = () => {
             loadExistingPending();
