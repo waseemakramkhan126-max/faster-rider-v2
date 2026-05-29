@@ -264,8 +264,7 @@ async function uploadConfirmedPhoto(){
     btn.disabled=true; btn.innerText="UPDATING...";
     
     try {
-        // App_settings wali line yahan se HATA di gayi hai.
-
+        // 1. Fetch Wallet Balance
         const { data: wal, error: walErr } = await _supabase.from('wallets')
             .select('current_balance')
             .eq('customer_phone', currentOrderData.customer_phone) 
@@ -273,13 +272,36 @@ async function uploadConfirmedPhoto(){
         
         if (walErr) console.error("Wallet Fetch Error:", walErr.message);
         
-        // 🔥 NAYA LOGIC: Order ke andar jo dc_amount pehle se save hai, wahi use hoga!
-        const dc = parseFloat(currentOrderData.dc_amount || 0);
+        // 🔥 NAYI HYBRID LOGIC: Pehle order se dc_amount uthayen
+        let dc = parseFloat(currentOrderData.dc_amount || 0);
+        
+        // Agar Order mein DC 0 hai, toh realtime database se uthayen
+        if (dc === 0) {
+            // Step A: Customer ka City aur Area mangwayen
+            const { data: custData } = await _supabase.from('customers')
+                .select('city, area')
+                .eq('phone', currentOrderData.customer_phone)
+                .single();
+            
+            if (custData && custData.city && custData.area) {
+                // Step B: Us City/Area ki exact Delivery Fee (customer_delivery_fee) uthayen
+                const { data: areaData } = await _supabase.from('delivery_areas')
+                    .select('customer_delivery_fee')
+                    .eq('city', custData.city)
+                    .eq('area_name', custData.area)
+                    .single();
+                    
+                if (areaData && areaData.customer_delivery_fee) {
+                    dc = parseFloat(areaData.customer_delivery_fee);
+                    console.log("Realtime Area Fee Applied: Rs.", dc);
+                }
+            }
+        }
         
         const prev = wal ? parseFloat(wal.current_balance || 0) : 0; 
         const shopBill = parseFloat(input);
         
-        // Ab calculation kabhi NaN (crash) nahi hogi
+        // Final Total Calculation (Ab DC kabhi zero nahi hoga agar area mein fee hai toh)
         const finalTotal = shopBill + dc + prev;
 
         const path = `bill_${Date.now()}.jpg`;
@@ -294,7 +316,7 @@ async function uploadConfirmedPhoto(){
 
         const { error: updateErr } = await _supabase.from('orders').update({
             item_price: shopBill, 
-            dc_amount: dc, // Exact wahi dc wapas save ho jayega
+            dc_amount: dc, // Yeh updated/hybrid DC wapas database mein fix ho jayega
             previous_due: prev,
             bill_amount: finalTotal, 
             bill_image: url, 
@@ -311,7 +333,7 @@ async function uploadConfirmedPhoto(){
     } catch(err) { 
         await customAlert("❌ Error: " + err.message); 
         btn.disabled=false; 
-        btn.innerText="Confirm & Bill"; // Button text ko wapas theek kar diya
+        btn.innerText="Confirm & Bill"; 
     }
 }
 
