@@ -102,6 +102,22 @@
     let currentOrders = [];
     let isModalOpen = false;
 
+    async function loadBranding() {
+        try {
+            const { data } = await _supabase.from('app_settings').select('logo_url').eq('id', 1).single();
+            if(data && data.logo_url) {
+                const hLogo = document.getElementById('headerLogo');
+                const sLogo = document.getElementById('sideLogo');
+                hLogo.src = data.logo_url;
+                hLogo.classList.remove('hidden');
+                document.getElementById('headerText').classList.add('hidden'); 
+                sLogo.src = data.logo_url;
+                sLogo.classList.remove('hidden');
+                document.getElementById('sidebarLogoFallback').classList.add('hidden');
+            }
+        } catch (e) { console.log("Branding error", e); }
+    }
+
     async function fetchOrders() {
     if (isModalOpen) return;
     
