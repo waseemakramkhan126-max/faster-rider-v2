@@ -103,33 +103,26 @@
     let isModalOpen = false;
 
     async function fetchOrders() {
-        // ... function ke shuru mein ...
-const riderArea = localStorage.getItem('rider_area'); 
-const riderId = riderData ? riderData.rider_id : null;
-
-// YE LINES ADD KAREIN
-console.log("Supabase Filter Area:", riderArea);
-console.log("Supabase Filter RiderID:", riderId);
     if (isModalOpen) return;
     
     const listContainer = document.getElementById('ordersList');
     
-    // 1. Data uthayen
+    // 1. Yahan se data uthayen (Sirf ek baar)
     const riderData = JSON.parse(localStorage.getItem('riderData'));
-    const riderArea = localStorage.getItem('rider_area'); 
+    const riderArea = localStorage.getItem('rider_area') || ""; 
     const riderId = riderData ? riderData.rider_id : null;
 
-    // DEBUG: Console mein check karein ke kya data aa raha hai
-    console.log("Debugging Fetch:", { riderArea, riderId });
+    // Console mein check karein ke data sahi uth raha hai
+    console.log("Checking Fetch Data:", { riderArea, riderId });
 
     try {
-        // 2. Query update ki hai: .ilike use kiya hai taake Capital/Small ka masla khatam ho
-        // Aur riderId match karne ke liye .eq use kiya hai
+        // 2. Query run karein
+        // Note: Agar riderArea khali hua toh query error de sakti hai, isliye hum ensure kar rahe hain
         const { data, error } = await _supabase
             .from('orders')
             .select('*')
             .eq('status', 'pending')
-            .or(`area.ilike.${riderArea},rider_id.eq.${riderId}`) // ilike case-insensitive search karega
+            .or(`area.ilike.${riderArea},rider_id.eq.${riderId}`) 
             .order('created_at', { ascending: false });
             
         if (error) {
@@ -137,11 +130,13 @@ console.log("Supabase Filter RiderID:", riderId);
             return;
         }
 
-        console.log("Filtered Data from Database:", data); // Check karein yahan kya mil raha hai
+        console.log("Database Data:", data);
 
-        if (data) {
+        if (data && data.length > 0) {
             currentOrders = data;
             updateOrderList(data);
+        } else {
+            if (listContainer) listContainer.innerHTML = `<p class="text-center py-20 opacity-20">No active orders</p>`;
         }
     } catch (e) {
         console.error("Crash Error:", e);
