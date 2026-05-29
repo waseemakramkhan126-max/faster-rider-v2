@@ -141,6 +141,10 @@
 
                 localStorage.setItem('riderData', JSON.stringify(data));
                 localStorage.setItem('rider_phone', data.phone);
+
+                 // Yeh nayi line add karein:
+                localStorage.setItem('rider_area', data.area); 
+
                 window.location.href = 'index.html';
 
             } catch (err) {
