@@ -105,31 +105,26 @@
     async function fetchOrders() {
     if (isModalOpen) return;
     
-    // Dono me se jo bhi ID page me maujood ho use safe select karega
     const listContainer = document.getElementById('ordersList') || document.getElementById('list');
     
-    // 1. Rider ka area safely LocalStorage se uthayen
-    // riderData ke andar se area nikalne ki koshish karein
-const riderArea = riderData ? riderData.area : ""; 
+    // Yahan global variable 'rider' ko use kiya hai aur safety check lagaya hai
+    const riderArea = (rider && rider.area) ? rider.area : "";
 
-// Checking ke liye console log lazmi lagayen
-console.log("Rider Ka Data:", riderData);
-console.log("Rider Ka Area:", riderArea);
+    console.log("Filter check karne ke liye Rider Area:", riderArea);
 
     try {
-        // 2. Base Query (Bilkul aapke purane code ki tarah)
+        // 1. Base Query
         let query = _supabase
             .from('orders')
             .select('*')
             .eq('status', 'pending');
 
-        // 3. Safe Area Filter: Sirf tab filter karega jab rider ka area actually mojood ho
+        // 2. Agar login rider ka area mil jata hai to sirf uski area ke orders dikhao
         if (riderArea && riderArea.trim() !== "") {
-            // .ilike aur % lagane se partial match bhi ho jayega (e.g., "Gulberg" in "Gulberg Phase 2")
             query = query.ilike('area', `%${riderArea.trim()}%`);
         }
 
-        // 4. Data finally fetch karein aur sort karein
+        // 3. Order Fetch karein
         const { data, error } = await query.order('created_at', { ascending: false });
             
         if (error) {
@@ -140,7 +135,7 @@ console.log("Rider Ka Area:", riderArea);
             return;
         }
 
-        // 5. Data ko list mein update karein
+        // 4. Data list me show karein
         if (data) {
             currentOrders = data;
             updateOrderList(data);
