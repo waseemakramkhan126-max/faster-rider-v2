@@ -264,8 +264,8 @@ async function uploadConfirmedPhoto(){
     btn.disabled=true; btn.innerText="UPDATING...";
     
     try {
-        const { data: set } = await _supabase.from('app_settings').select('customer_delivery_fee').eq('id', 1).single();
-        
+        // App_settings wali line yahan se HATA di gayi hai.
+
         const { data: wal, error: walErr } = await _supabase.from('wallets')
             .select('current_balance')
             .eq('customer_phone', currentOrderData.customer_phone) 
@@ -273,9 +273,13 @@ async function uploadConfirmedPhoto(){
         
         if (walErr) console.error("Wallet Fetch Error:", walErr.message);
         
-        const dc = set ? parseFloat(set.customer_delivery_fee) : 150;
+        // 🔥 NAYA LOGIC: Order ke andar jo dc_amount pehle se save hai, wahi use hoga!
+        const dc = parseFloat(currentOrderData.dc_amount || 0);
+        
         const prev = wal ? parseFloat(wal.current_balance || 0) : 0; 
         const shopBill = parseFloat(input);
+        
+        // Ab calculation kabhi NaN (crash) nahi hogi
         const finalTotal = shopBill + dc + prev;
 
         const path = `bill_${Date.now()}.jpg`;
@@ -290,7 +294,7 @@ async function uploadConfirmedPhoto(){
 
         const { error: updateErr } = await _supabase.from('orders').update({
             item_price: shopBill, 
-            dc_amount: dc, 
+            dc_amount: dc, // Exact wahi dc wapas save ho jayega
             previous_due: prev,
             bill_amount: finalTotal, 
             bill_image: url, 
@@ -307,7 +311,7 @@ async function uploadConfirmedPhoto(){
     } catch(err) { 
         await customAlert("❌ Error: " + err.message); 
         btn.disabled=false; 
-        btn.innerText="RETRY"; 
+        btn.innerText="Confirm & Bill"; // Button text ko wapas theek kar diya
     }
 }
 
