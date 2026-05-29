@@ -107,36 +107,51 @@
     
     const listContainer = document.getElementById('ordersList');
     
-    // 1. Yahan se data uthayen (Sirf ek baar)
+    // 1. Data uthayen
     const riderData = JSON.parse(localStorage.getItem('riderData'));
     const riderArea = localStorage.getItem('rider_area') || ""; 
     const riderId = riderData ? riderData.rider_id : null;
 
-    // Console mein check karein ke data sahi uth raha hai
     console.log("Checking Fetch Data:", { riderArea, riderId });
 
     try {
-        // 2. Query run karein
-        // Note: Agar riderArea khali hua toh query error de sakti hai, isliye hum ensure kar rahe hain
-        const { data, error } = await _supabase
+        // Query builder ko initialize karein
+        let query = _supabase
             .from('orders')
             .select('*')
-            .eq('status', 'pending')
-            .or(`area.ilike.${riderArea},rider_id.eq.${riderId}`) 
+            .eq('status', 'pending') // Check karein DB me 'pending' small letters me hi hai?
             .order('created_at', { ascending: false });
+
+        // Safely .or() condition lagayen
+        if (riderArea && riderId) {
+            // Agar dono hain: string ke ird-gird double quotes ("") lagana zaroori hai agar space ho
+            query = query.or(`area.ilike."%${riderArea}%",rider_id.eq.${riderId}`);
+        } else if (riderArea) {
+            // Agar sirf area hai
+            query = query.ilike('area', `%${riderArea}%`);
+        } else if (riderId) {
+            // Agar sirf riderId hai
+            query = query.eq('rider_id', riderId);
+        }
+
+        const { data, error } = await query;
             
         if (error) {
             console.error("Supabase Error:", error);
             return;
         }
 
-        console.log("Database Data:", data);
+        console.log("Database Data Result:", data);
 
+        // 3. UI Update Karein
         if (data && data.length > 0) {
+            // NOTE: Make sure updateOrderList function sahi se kaam kar raha ho
             currentOrders = data;
-            updateOrderList(data);
+            updateOrderList(data); 
         } else {
-            if (listContainer) listContainer.innerHTML = `<p class="text-center py-20 opacity-20">No active orders</p>`;
+            if (listContainer) {
+                listContainer.innerHTML = `<p class="text-center py-20 opacity-20">No active orders</p>`;
+            }
         }
     } catch (e) {
         console.error("Crash Error:", e);
