@@ -59,7 +59,7 @@
             </button>
             <h1 class="text-sm font-black uppercase tracking-widest text-orange-500">Available Jobs</h1>
         </div>
-        <img src="https://hfaghazbwdbjurachzzq.supabase.co/storage/v1/object/public/order-files/img_1771546661816.jpg" class="w-9 h-9 rounded-full border border-white/10 shadow-lg">
+        <img id="headerLogo" src="https://hfaghazbwdbjurachzzq.supabase.co/storage/v1/object/public/order-files/img_1771546661816.jpg" class="w-9 h-9 rounded-full border border-white/10 shadow-lg">
     </header>
 
     <main id="ordersList" class="p-4 space-y-4">
@@ -106,17 +106,22 @@
         try {
             const { data } = await _supabase.from('app_settings').select('logo_url').eq('id', 1).single();
             if(data && data.logo_url) {
+                // Sirf un elements ko target karein jo is page par majood hain
                 const hLogo = document.getElementById('headerLogo');
-                const sLogo = document.getElementById('sideLogo');
-                hLogo.src = data.logo_url;
-                hLogo.classList.remove('hidden');
-                document.getElementById('headerText').classList.add('hidden'); 
-                sLogo.src = data.logo_url;
-                sLogo.classList.remove('hidden');
-                document.getElementById('sidebarLogoFallback').classList.add('hidden');
+                
+                if (hLogo) {
+                    hLogo.src = data.logo_url;
+                    hLogo.classList.remove('hidden');
+                }
             }
-        } catch (e) { console.log("Branding error", e); }
+        } catch (e) { 
+            console.log("Branding error:", e); 
+        }
     }
+
+    // Isko initialize load mein lazmi add karein taa-ke page khulte hi yeh chalay
+    loadBranding();
+    fetchOrders(); // Yeh aapke code me pehle se majood tha
 
     async function fetchOrders() {
     if (isModalOpen) return;
