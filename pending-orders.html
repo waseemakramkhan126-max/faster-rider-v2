@@ -105,56 +105,46 @@
     async function fetchOrders() {
     if (isModalOpen) return;
     
-    const listContainer = document.getElementById('ordersList');
+    // Dono me se jo bhi ID page me maujood ho use safe select karega
+    const listContainer = document.getElementById('ordersList') || document.getElementById('list');
     
-    // 1. Data uthayen
-    const riderData = JSON.parse(localStorage.getItem('riderData'));
-    const riderArea = localStorage.getItem('rider_area') || ""; 
-    const riderId = riderData ? riderData.rider_id : null;
-
-    console.log("Checking Fetch Data:", { riderArea, riderId });
+    // 1. Rider ka area safely LocalStorage se uthayen
+    const riderArea = localStorage.getItem('rider_area') || "";
 
     try {
-        // Query builder ko initialize karein
+        // 2. Base Query (Bilkul aapke purane code ki tarah)
         let query = _supabase
             .from('orders')
             .select('*')
-            .eq('status', 'pending') // Check karein DB me 'pending' small letters me hi hai?
-            .order('created_at', { ascending: false });
+            .eq('status', 'pending');
 
-        // Safely .or() condition lagayen
-        if (riderArea && riderId) {
-            // Agar dono hain: string ke ird-gird double quotes ("") lagana zaroori hai agar space ho
-            query = query.or(`area.ilike."%${riderArea}%",rider_id.eq.${riderId}`);
-        } else if (riderArea) {
-            // Agar sirf area hai
-            query = query.ilike('area', `%${riderArea}%`);
-        } else if (riderId) {
-            // Agar sirf riderId hai
-            query = query.eq('rider_id', riderId);
+        // 3. Safe Area Filter: Sirf tab filter karega jab rider ka area actually mojood ho
+        if (riderArea && riderArea.trim() !== "") {
+            // .ilike aur % lagane se partial match bhi ho jayega (e.g., "Gulberg" in "Gulberg Phase 2")
+            query = query.ilike('area', `%${riderArea.trim()}%`);
         }
 
-        const { data, error } = await query;
+        // 4. Data finally fetch karein aur sort karein
+        const { data, error } = await query.order('created_at', { ascending: false });
             
         if (error) {
             console.error("Supabase Error:", error);
+            if (listContainer) {
+                listContainer.innerHTML = `<div class="text-center py-20 text-red-500 text-xs font-bold uppercase tracking-wider">Error: ${error.message}</div>`;
+            }
             return;
         }
 
-        console.log("Database Data Result:", data);
-
-        // 3. UI Update Karein
-        if (data && data.length > 0) {
-            // NOTE: Make sure updateOrderList function sahi se kaam kar raha ho
+        // 5. Data ko list mein update karein
+        if (data) {
             currentOrders = data;
-            updateOrderList(data); 
-        } else {
-            if (listContainer) {
-                listContainer.innerHTML = `<p class="text-center py-20 opacity-20">No active orders</p>`;
-            }
+            updateOrderList(data);
         }
     } catch (e) {
         console.error("Crash Error:", e);
+        if (listContainer) {
+            listContainer.innerHTML = `<div class="text-center py-20 text-red-500 text-xs font-bold uppercase tracking-wider">Crash: ${e.message}</div>`;
+        }
     }
 }
     function updateOrderList(orders) {
