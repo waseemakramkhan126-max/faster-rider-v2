@@ -102,38 +102,45 @@
     let isModalOpen = false;
 
     async function fetchOrders() {
-        if (isModalOpen) return;
-        
-        // Dono me se jo bhi ID page me maujood ho use safe select karega
-        const listContainer = document.getElementById('ordersList') || document.getElementById('list');
-        
-        try {
-            const { data, error } = await _supabase
-                .from('orders')
-                .select('*')
-                .eq('status', 'pending')
-                .order('created_at', { ascending: false });
-                
-            if (error) {
-                console.error("Supabase Error:", error);
-                if (listContainer) {
-                    listContainer.innerHTML = `<div class="text-center py-20 text-red-500 text-xs font-bold uppercase tracking-wider">Error: ${error.message}</div>`;
-                }
-                return;
-            }
+    if (isModalOpen) return;
+    
+    const listContainer = document.getElementById('ordersList');
+    
+    // Rider ka data aur Area uthayen jo humne login ke waqt save kiya tha
+    const riderData = JSON.parse(localStorage.getItem('riderData'));
+    const riderArea = localStorage.getItem('rider_area'); 
+    const riderId = riderData ? riderData.rider_id : null;
 
-            if (data) {
-                currentOrders = data;
-                updateOrderList(data);
-            }
-        } catch (e) {
-            console.error("Crash Error:", e);
+    try {
+        // Hybrid Logic Query: 
+        // 1. Area match ho (riderArea)
+        // 2. YA Rider ID match ho (Admin assignment)
+        const { data, error } = await _supabase
+            .from('orders')
+            .select('*')
+            .eq('status', 'pending')
+            .or(`area.eq.${riderArea},rider_id.eq.${riderId}`) 
+            .order('created_at', { ascending: false });
+            
+        if (error) {
+            console.error("Supabase Error:", error);
             if (listContainer) {
-                listContainer.innerHTML = `<div class="text-center py-20 text-red-500 text-xs font-bold uppercase tracking-wider">Crash: ${e.message}</div>`;
+                listContainer.innerHTML = `<div class="text-center py-20 text-red-500 text-xs font-bold uppercase tracking-wider">Error: ${error.message}</div>`;
             }
+            return;
+        }
+
+        if (data) {
+            currentOrders = data;
+            updateOrderList(data);
+        }
+    } catch (e) {
+        console.error("Crash Error:", e);
+        if (listContainer) {
+            listContainer.innerHTML = `<div class="text-center py-20 text-red-500 text-xs font-bold uppercase tracking-wider">Crash: ${e.message}</div>`;
         }
     }
-
+}
     function updateOrderList(orders) {
         // ID safe handling
         const list = document.getElementById('ordersList') || document.getElementById('list');
