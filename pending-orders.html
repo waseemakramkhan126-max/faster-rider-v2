@@ -109,7 +109,12 @@
     const listContainer = document.getElementById('ordersList') || document.getElementById('list');
     
     // 1. Rider ka area safely LocalStorage se uthayen
-    const riderArea = "Bahria Town";
+    // riderData ke andar se area nikalne ki koshish karein
+const riderArea = riderData ? riderData.area : ""; 
+
+// Checking ke liye console log lazmi lagayen
+console.log("Rider Ka Data:", riderData);
+console.log("Rider Ka Area:", riderArea);
 
     try {
         // 2. Base Query (Bilkul aapke purane code ki tarah)
