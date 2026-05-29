@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Faster - Available Orders</title>
@@ -102,6 +103,13 @@
     let isModalOpen = false;
 
     async function fetchOrders() {
+        // ... function ke shuru mein ...
+const riderArea = localStorage.getItem('rider_area'); 
+const riderId = riderData ? riderData.rider_id : null;
+
+// YE LINES ADD KAREIN
+console.log("Supabase Filter Area:", riderArea);
+console.log("Supabase Filter RiderID:", riderId);
     if (isModalOpen) return;
     
     const listContainer = document.getElementById('ordersList');
