@@ -351,15 +351,29 @@ async function finishOrderAction() {
     const bal = parseFloat(currentOrderData.bill_amount) - paid;
 
     try {
-        // 1. Fetch Fixed Fees
-        const { data: settings, error: setErr } = await _supabase
-            .from('app_settings')
-            .select('customer_delivery_fee, rider_commission')
-            .eq('id', 1).single();
+        // 1. Fetch Fees & Commissions from Respective Tables in Parallel
+        const [settingsRes, custRes] = await Promise.all([
+            _supabase.from('app_settings').select('rider_commission').eq('id', 1).single(),
+            _supabase.from('customers').select('city, area').eq('phone', currentOrderData.customer_phone).maybeSingle()
+        ]);
             
-        if (setErr) throw new Error("Settings fetch fail: " + setErr.message);
+        if (settingsRes.error) throw new Error("Settings fetch fail: " + settingsRes.error.message);
 
-        const riderCut = parseFloat(settings.rider_commission || 0);
+        const riderCut = parseFloat(settingsRes.data.rider_commission || 0);
+
+        // Fetch custom delivery fee dynamically from delivery_areas (for reference or future updates)
+        let customerDeliveryFee = 0;
+        if (custRes.data && custRes.data.city && custRes.data.area) {
+            const { data: areaData } = await _supabase
+                .from('delivery_areas')
+                .select('customer_delivery_fee')
+                .eq('city', custRes.data.city)
+                .eq('area_name', custRes.data.area)
+                .maybeSingle();
+            if (areaData) {
+                customerDeliveryFee = parseFloat(areaData.customer_delivery_fee || 0);
+            }
+        }
 
         // 🔥 NAYA FORMULA: Asal Hisaab (Cash in Hand)
         const itemPrice = parseFloat(currentOrderData.item_price || 0);
@@ -439,10 +453,9 @@ async function finishOrderAction() {
     }
 }
 
-
 // . Phir sirf is specific order ke liye Supabase Realtime active kar dein
 if (orderId) { 
-        fetchOrderDetails();
+    fetchOrderDetails();
     _supabase.channel(`live-order-${orderId}`)
         .on('postgres_changes', { 
             event: 'UPDATE', // Jab bhi database me data update ho
