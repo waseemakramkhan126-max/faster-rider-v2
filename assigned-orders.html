@@ -29,10 +29,10 @@
         async function load() {
             if(!rider) return;
             const { data } = await _supabase.from('orders')
-                .select('*')
-                .eq('rider_id', rider.rider_id)
-                .eq('status', 'assigned')
-                .order('created_at', { ascending: false });
+           .select('*')
+           .eq('rider_id', rider.rider_id)
+           .in('status', ['assigned', 'arrived']) // <-- Ye line change karein
+           .order('created_at', { ascending: false });
 
             const container = document.getElementById('list');
             if(!data || data.length === 0) {
