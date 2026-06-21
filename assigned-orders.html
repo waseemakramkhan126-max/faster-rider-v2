@@ -22,7 +22,7 @@
 
     <script>
         const SB_URL = "https://hkabhikizdlbavfkualt.supabase.co";
-        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrYWJoaWtpemRsYmF2Zmt1YWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODgyMjUsImV4cCI6MjA5MjA2NDIyNX0.iMlS6-M1aylW8K915LPYDHOg7qUxwu5GelH_CPHLP2U";
+        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrYWJoaWtpemRsYmF2Zmt1YWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODgyMjUsImV4cCI6MjA5MjA2NDIyNX0.iMlS6-M";
         const _supabase = supabase.createClient(SB_URL, SB_KEY);
         const rider = JSON.parse(localStorage.getItem('riderData'));
 
@@ -41,7 +41,7 @@
             }
 
             container.innerHTML = data.map(o => `
-                <div onclick="location.href='order-details.html?id=${o.id}'" class="bg-slate-800/40 p-5 rounded-[2rem] border border-white/5 flex items-center justify-between shadow-xl active:scale-95 transition-all">
+                <div onclick="location.href='order-details.html?id=${o.id}'" class="bg-slate-800/40 p-5 rounded-[2rem] border border-white/5 flex items-center justify-between shadow-xl active:scale-95 transition-all cursor-pointer hover:bg-slate-800/60">
                     <div class="flex items-center gap-4">
                         <div class="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center text-slate-900 font-black text-lg capitalize">${o.customer_name[0]}</div>
                         <div>
