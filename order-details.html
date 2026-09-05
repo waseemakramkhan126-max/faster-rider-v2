@@ -77,11 +77,11 @@ audio { filter: sepia(20%) saturate(70%) grayscale(1) contrast(90%) invert(100%)
     <div class="w-full max-w-sm rounded-[2rem] p-6 border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] text-center relative overflow-hidden" style="background: rgba(30, 41, 59, 0.65); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);">
         <div class="absolute -top-10 -left-10 w-32 h-32 bg-orange-500/30 rounded-full blur-3xl"></div>
         <div class="absolute -bottom-10 -right-10 w-32 h-32 bg-teal-500/20 rounded-full blur-3xl"></div>
-        
+
         <h3 id="modalTitle" class="text-white font-black text-[13px] mb-5 uppercase tracking-widest relative z-10 leading-relaxed">Message</h3>
-        
+
         <input type="number" id="modalInput" class="hidden w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white text-center font-extrabold text-3xl mb-6 outline-none focus:border-orange-500/50 shadow-inner relative z-10" placeholder="0">
-        
+
         <div class="flex gap-3 relative z-10">
             <button id="modalCancel" class="hidden flex-1 py-4 rounded-2xl font-bold text-white/60 bg-white/5 active:bg-white/10 border border-white/5 transition-all uppercase text-[10px] tracking-widest">Cancel</button>
             <button id="modalOk" class="flex-1 py-4 rounded-2xl font-black text-white bg-gradient-to-r from-orange-500 to-orange-600 shadow-xl active:scale-95 border border-orange-400/50 transition-all uppercase text-[10px] tracking-widest">Confirm</button>
@@ -96,9 +96,9 @@ function customAlert(message) {
         document.getElementById('modalTitle').innerText = message;
         document.getElementById('modalInput').classList.add('hidden');
         document.getElementById('modalCancel').classList.add('hidden');
-        
+
         modal.classList.remove('hidden');
-        
+
         document.getElementById('modalOk').onclick = () => {
             modal.classList.add('hidden');
             resolve(true);
@@ -111,21 +111,21 @@ function customPrompt(message, defaultValue = "") {
         const modal = document.getElementById('customModal');
         const input = document.getElementById('modalInput');
         const cancelBtn = document.getElementById('modalCancel');
-        
+
         document.getElementById('modalTitle').innerText = message;
         input.value = defaultValue;
         input.classList.remove('hidden');
         cancelBtn.classList.remove('hidden');
-        
+
         modal.classList.remove('hidden');
         setTimeout(() => input.focus(), 100);
-        
+
         document.getElementById('modalOk').onclick = () => {
-            if(input.value.trim() === "") return; 
+            if(input.value.trim() === "") return;
             modal.classList.add('hidden');
             resolve(input.value);
         };
-        
+
         cancelBtn.onclick = () => {
             modal.classList.add('hidden');
             resolve(null);
@@ -141,6 +141,11 @@ const params = new URLSearchParams(window.location.search);
 const orderId = params.get('id');
 let stream = null, finalBlob = null, currentOrderData = null;
 
+// Guards against double-tapping "Confirm & Bill" / "Order Delivered" while
+// a previous prompt/request for the same action is still in progress.
+let isBillingInProgress = false;
+let isFinishInProgress = false;
+
 if(orderId) {
     document.getElementById('chatBtn').onclick = () => location.href = 'customer-chat.html?id=' + orderId;
 }
@@ -154,15 +159,18 @@ async function fetchOrderDetails() {
         const { data: o, error } = await _supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
         if (error) throw error;
         if (!o) throw "Order not found";
-        
+
         currentOrderData = o;
         document.getElementById('custName').innerText = o.customer_name || "Customer";
         document.getElementById('custAddr').innerText = o.delivery_address || "No Address";
-        
+
         let chatHtml = '';
         const parseMedia = (val) => (val && typeof val === 'string') ? val.split(',').map(s => s.trim()) : [];
 
-        const allTextLines = String(o.order_details || '').split(/[|\n]/).map(line => line.trim()).filter(l => l !== "");
+        // BUGFIX: order_details is comma-separated (not just | or newline),
+        // so comma is now included as a split delimiter too — otherwise all
+        // items were rendering squashed into a single bubble.
+        const allTextLines = String(o.order_details || '').split(/[|\n,]/).map(line => line.trim()).filter(l => l !== "");
         const images = parseMedia(o.image_url);
         const videos = parseMedia(o.video_url);
         const voices = parseMedia(o.voice_url);
@@ -224,15 +232,15 @@ function renderButtons(o){
     }
 }
 
-async function startCamera(){ 
-    document.getElementById('cameraContainer').style.display='flex'; 
+async function startCamera(){
+    document.getElementById('cameraContainer').style.display='flex';
     retakePhoto();
     try {
-        stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}); 
-        document.getElementById('v').srcObject = stream; 
-    } catch(e) { 
-        await customAlert("Camera Error: " + e.message); 
-        stopCamera(); 
+        stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+        document.getElementById('v').srcObject = stream;
+    } catch(e) {
+        await customAlert("Camera Error: " + e.message);
+        stopCamera();
     }
 }
 
@@ -249,32 +257,36 @@ async function freezeFrame(){
     document.getElementById('cameraControls').classList.add('hidden'); document.getElementById('confirmControls').classList.remove('hidden');
 }
 
-function retakePhoto(){ 
-    document.getElementById('v').style.display='block'; 
-    document.getElementById('previewCanvas').style.display='none'; 
-    document.getElementById('cameraControls').classList.remove('hidden'); 
-    document.getElementById('confirmControls').classList.add('hidden'); 
+function retakePhoto(){
+    document.getElementById('v').style.display='block';
+    document.getElementById('previewCanvas').style.display='none';
+    document.getElementById('cameraControls').classList.remove('hidden');
+    document.getElementById('confirmControls').classList.add('hidden');
 }
 
 async function uploadConfirmedPhoto(){
+    // BUGFIX: guard against double-tap while a previous confirm is still processing.
+    if (isBillingInProgress) return;
+
     const input = await customPrompt("Dukan ka bill (Sirf Saman ki price) likhen:");
     if(input === null || isNaN(input) || input.trim() === "") return;
-    
+
+    isBillingInProgress = true;
     const btn = document.getElementById('confirmBillBtn');
     btn.disabled=true; btn.innerText="UPDATING...";
-    
+
     try {
         // 1. Fetch Wallet Balance
         const { data: wal, error: walErr } = await _supabase.from('wallets')
             .select('current_balance')
-            .eq('customer_phone', currentOrderData.customer_phone) 
+            .eq('customer_phone', currentOrderData.customer_phone)
             .maybeSingle();
-        
+
         if (walErr) console.error("Wallet Fetch Error:", walErr.message);
-        
+
         // 🔥 NAYI HYBRID LOGIC: Pehle order se dc_amount uthayen
         let dc = parseFloat(currentOrderData.dc_amount || 0);
-        
+
         // Agar Order mein DC 0 hai, toh realtime database se uthayen
         if (dc === 0) {
             // Step A: Customer ka City aur Area mangwayen
@@ -282,7 +294,7 @@ async function uploadConfirmedPhoto(){
                 .select('city, area')
                 .eq('phone', currentOrderData.customer_phone)
                 .single();
-            
+
             if (custData && custData.city && custData.area) {
                 // Step B: Us City/Area ki exact Delivery Fee (customer_delivery_fee) uthayen
                 const { data: areaData } = await _supabase.from('delivery_areas')
@@ -290,24 +302,24 @@ async function uploadConfirmedPhoto(){
                     .eq('city', custData.city)
                     .eq('area_name', custData.area)
                     .single();
-                    
+
                 if (areaData && areaData.customer_delivery_fee) {
                     dc = parseFloat(areaData.customer_delivery_fee);
                     console.log("Realtime Area Fee Applied: Rs.", dc);
                 }
             }
         }
-        
-        const prev = wal ? parseFloat(wal.current_balance || 0) : 0; 
+
+        const prev = wal ? parseFloat(wal.current_balance || 0) : 0;
         const shopBill = parseFloat(input);
-        
+
         // Final Total Calculation (Ab DC kabhi zero nahi hoga agar area mein fee hai toh)
         const finalTotal = shopBill + dc + prev;
 
         const path = `bill_${Date.now()}.jpg`;
-        
+
         const { data: uploadData, error: uploadErr } = await _supabase.storage.from('order-files').upload(path, finalBlob);
-        
+
         if (uploadErr) {
             throw new Error("Image Upload Fail Ho Gayi: " + uploadErr.message);
         }
@@ -315,11 +327,11 @@ async function uploadConfirmedPhoto(){
         const url = `${SB_URL}/storage/v1/object/public/order-files/${path}`;
 
         const { error: updateErr } = await _supabase.from('orders').update({
-            item_price: shopBill, 
+            item_price: shopBill,
             dc_amount: dc, // Yeh updated/hybrid DC wapas database mein fix ho jayega
             previous_due: prev,
-            bill_amount: finalTotal, 
-            bill_image: url, 
+            bill_amount: finalTotal,
+            bill_image: url,
             rider_status: 'Bill Uploaded'
         }).eq('id', orderId);
 
@@ -327,26 +339,47 @@ async function uploadConfirmedPhoto(){
             throw new Error("Order Update Fail: " + updateErr.message);
         }
 
-        stopCamera(); 
+        stopCamera();
         window.location.reload();
-        
-    } catch(err) { 
-        await customAlert("❌ Error: " + err.message); 
-        btn.disabled=false; 
-        btn.innerText="Confirm & Bill"; 
+
+    } catch(err) {
+        await customAlert("❌ Error: " + err.message);
+        btn.disabled=false;
+        btn.innerText="Confirm & Bill";
+        isBillingInProgress = false;
     }
 }
 
-async function updateRiderStatus(s){ 
-    await _supabase.from('orders').update({ rider_status: s, status: 'arrived', arrived_at: new Date().toISOString() }).eq('id', orderId); 
-    window.location.reload(); 
+async function updateRiderStatus(s){
+    // BUGFIX: previously this also set status: 'arrived', mixing the
+    // broad lifecycle `status` field with rider progress values that
+    // belong in `rider_status` only. `status` stays 'assigned' until the
+    // order is actually completed in finishOrderAction().
+    await _supabase.from('orders').update({ rider_status: s, arrived_at: new Date().toISOString() }).eq('id', orderId);
+    window.location.reload();
 }
 
-// --- NEW 100% BULLETPROOF FINISH ORDER LOGIC WITH DUAL WALLET SYNC ---
+// --- 100% BULLETPROOF FINISH ORDER LOGIC WITH DUAL WALLET SYNC ---
+// (Financial/payment calculation logic below is UNCHANGED from the
+// original — only the input-validation and double-tap guards around it
+// were added.)
 async function finishOrderAction() {
+    // BUGFIX: guard against double-tap while a previous finish is still processing.
+    if (isFinishInProgress) return;
+
     const cash = await customPrompt(`Enter Received Amount`, currentOrderData.bill_amount);
     if(cash === null || cash.trim() === "") return;
-    
+
+    // BUGFIX: validate the entered amount is actually a number before
+    // proceeding — previously an invalid entry silently became NaN and
+    // corrupted final_amount/balance_amount without any warning.
+    if (isNaN(parseFloat(cash))) {
+        await customAlert("Sahi amount likhein.");
+        return;
+    }
+
+    isFinishInProgress = true;
+
     const paid = parseFloat(cash);
     const bal = parseFloat(currentOrderData.bill_amount) - paid;
 
@@ -356,7 +389,7 @@ async function finishOrderAction() {
             _supabase.from('app_settings').select('rider_commission').eq('id', 1).single(),
             _supabase.from('customers').select('city, area').eq('phone', currentOrderData.customer_phone).maybeSingle()
         ]);
-            
+
         if (settingsRes.error) throw new Error("Settings fetch fail: " + settingsRes.error.message);
 
         const riderCut = parseFloat(settingsRes.data.rider_commission || 0);
@@ -392,7 +425,7 @@ async function finishOrderAction() {
 
         let currentRiderBalance = 0;
         if (rWallet) { currentRiderBalance = parseFloat(rWallet.balance || 0); }
-        
+
         // Puraana hisaab + Naya hisaab
         const newRiderBalance = currentRiderBalance + netOwedToOffice;
 
@@ -405,12 +438,12 @@ async function finishOrderAction() {
         }
 
         // 3. Mark Order Completed
-        const { error: orderErr } = await _supabase.from('orders').update({ 
-            status: 'completed', 
-            rider_status: 'Delivered', 
-            final_amount: paid, 
-            balance_amount: bal, 
-            updated_at: new Date().toISOString() 
+        const { error: orderErr } = await _supabase.from('orders').update({
+            status: 'completed',
+            rider_status: 'Delivered',
+            final_amount: paid,
+            balance_amount: bal,
+            updated_at: new Date().toISOString()
         }).eq('id', orderId);
 
         if (orderErr) throw new Error("Orders Table Error: " + orderErr.message);
@@ -425,19 +458,19 @@ async function finishOrderAction() {
         if (fetchErr) throw new Error("Wallets Check Error: " + fetchErr.message);
 
         if (existingWallet) {
-            const { error: updateErr } = await _supabase.from('wallets').update({ 
-                current_balance: bal, 
-                updated_at: new Date().toISOString() 
+            const { error: updateErr } = await _supabase.from('wallets').update({
+                current_balance: bal,
+                updated_at: new Date().toISOString()
             }).eq('customer_phone', currentOrderData.customer_phone);
-            
+
             if (updateErr) throw new Error("Customer Wallet Update Error: " + updateErr.message);
         } else {
-            const { error: insertErr } = await _supabase.from('wallets').insert([{ 
+            const { error: insertErr } = await _supabase.from('wallets').insert([{
                 customer_phone: currentOrderData.customer_phone,
-                current_balance: bal, 
-                updated_at: new Date().toISOString() 
+                current_balance: bal,
+                updated_at: new Date().toISOString()
             }]);
-            
+
             if (insertErr) throw new Error("Customer Wallet Insert Error: " + insertErr.message);
         }
 
@@ -450,16 +483,17 @@ async function finishOrderAction() {
 
     } catch (err) {
         await customAlert("❌ Error during financial sync: " + err.message);
+        isFinishInProgress = false;
     }
 }
 
-// . Phir sirf is specific order ke liye Supabase Realtime active kar dein
-if (orderId) { 
+// Phir sirf is specific order ke liye Supabase Realtime active kar dein
+if (orderId) {
     fetchOrderDetails();
     _supabase.channel(`live-order-${orderId}`)
-        .on('postgres_changes', { 
+        .on('postgres_changes', {
             event: 'UPDATE', // Jab bhi database me data update ho
-            schema: 'public', 
+            schema: 'public',
             table: 'orders',
             filter: `id=eq.${orderId}` // Sirf isi order ka data check kare
         }, (payload) => {
