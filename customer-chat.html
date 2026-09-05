@@ -213,9 +213,10 @@
                                 sendMsg('voice', '', urlData.publicUrl);
                             }
                         } catch (convErr) {
-                            console.error("Audio conversion failed:", convErr);
-                            alert("Voice note convert nahi ho saka, dobara try karein.");
-                        } finally {
+    console.error("Audio conversion failed:", convErr);
+    alert("Convert Error: " + (convErr.message || convErr.toString()));
+}
+                         finally {
                             statusDot.classList.replace('status-active', 'status-online');
                             statusText.innerText = "Online";
                         }
