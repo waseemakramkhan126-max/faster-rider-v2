@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; height: 100dvh; }
@@ -14,19 +15,17 @@
         .bubble-in, .bubble-out { max-width: 85%; word-wrap: break-word; overflow-wrap: break-word; word-break: break-all; }
         .bubble-in { background: white; border-radius: 0 15px 15px 15px; align-self: flex-start; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
         .bubble-out { background: #dcf8c6; border-radius: 15px 0 15px 15px; align-self: flex-end; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
-        
-        /* Status Animations */
+
         .status-dot { width: 8px; height: 8px; border-radius: 50%; transition: all 0.3s ease; }
         .status-online { background-color: #4ade80; box-shadow: 0 0 5px #4ade80; }
         .status-active { background-color: #ef4444; animation: pulse-red 1s infinite; box-shadow: 0 0 8px #ef4444; }
 
         @keyframes pulse-red { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
         .mic-active { background-color: #ef4444 !important; animation: pulse-red 1s infinite; }
-        #chatBox { 
-         scroll-behavior: smooth; 
-          overflow-y: auto; 
-           /* Fixed height hata kar flex grow de rahe hain taake footer hamesha screen par rahe */
-         flex: 1 1 0%; 
+        #chatBox {
+         scroll-behavior: smooth;
+          overflow-y: auto;
+         flex: 1 1 0%;
          }
         .animate-pop { animation: pop 0.2s ease-out; }
         @keyframes pop { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
@@ -35,13 +34,13 @@
     </style>
 </head>
 <body class="fixed inset-0 flex flex-col overflow-hidden bg-[#e5ddd5]">
-    
+
     <header class="bg-[#075e54] p-4 text-white flex items-center shadow-md shrink-0 z-10">
         <i class="fas fa-arrow-left mr-4 cursor-pointer text-lg" onclick="history.back()"></i>
         <div class="flex-1">
             <h1 id="headerTitle" class="font-bold text-sm uppercase tracking-tight">Customer Chat</h1>
             <p class="text-[10px] opacity-80 flex items-center gap-1">
-                <span id="statusDot" class="status-dot status-online"></span> 
+                <span id="statusDot" class="status-dot status-online"></span>
                 <span id="statusText">Online</span>
             </p>
         </div>
@@ -54,7 +53,7 @@
             <i class="fas fa-camera"></i>
         </button>
         <input type="file" id="fileInp" class="hidden" accept="image/*" onchange="uploadFile(this)">
-        
+
         <div class="flex-1 bg-gray-100 rounded-2xl flex items-center px-4 min-w-0">
             <textarea id="msgInp" oninput="toggleButtons(); autoHeight(this)" placeholder="Type a message" rows="1" class="w-full bg-transparent py-2 outline-none text-sm resize-none" style="height: 36px; max-height: 100px;"></textarea>
         </div>
@@ -75,23 +74,31 @@
         const _supabase = supabase.createClient(SB_URL, SB_KEY);
 
         const urlParams = new URLSearchParams(window.location.search);
-        const orderId = urlParams.get('id'); // Rider app usually passes 'id'
+        const orderId = urlParams.get('id');
         const riderPhone = localStorage.getItem('rider_phone') || 'Rider';
 
         let mediaRecorder;
-let audioChunks = [];
+        let audioChunks = [];
 
-// Mobile keyboard khulne/band hone par footer ko sahi jagah rakhta hai
-if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', () => {
-        const footer = document.querySelector('footer');
-        const offset = window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop;
-        footer.style.transform = `translateY(-${offset > 0 ? offset : 0}px)`;
-    });
-}
+        // ffmpeg.wasm — converts whatever raw format the device records
+        // (usually webm, which WhatsApp rejects) into a proper MP3
+        // (audio/mpeg), which WhatsApp supports on every device regardless
+        // of what the browser's MediaRecorder actually produced.
+        const { createFFmpeg, fetchFile } = FFmpeg;
+        const ffmpeg = createFFmpeg({ log: false });
+        let ffmpegLoaded = false;
+
+        // Mobile keyboard khulne/band hone par footer ko sahi jagah rakhta hai
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                const footer = document.querySelector('footer');
+                const offset = window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop;
+                footer.style.transform = `translateY(-${offset > 0 ? offset : 0}px)`;
+            });
+        }
 
         function autoHeight(el) {
-            el.style.height = '36px'; 
+            el.style.height = '36px';
             el.style.height = Math.min(el.scrollHeight, 100) + 'px';
         }
 
@@ -101,21 +108,20 @@ if (window.visualViewport) {
             document.getElementById('voiceBtn').classList.toggle('hidden', val !== "");
         }
 
-        // WhatsApp Style Bubbles
         function renderBubble(m) {
             const isMe = m.sender_phone === riderPhone;
             const time = m.created_at ? new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Just now';
-            
+
             let mediaHtml = '';
-if (m.type === 'image' && m.file_url) {
-    mediaHtml = `<img src="${m.file_url}" class="rounded-lg mb-1 max-h-60 w-full object-cover shadow-sm" onclick="window.open('${m.file_url}')">`;
-} else if (m.type === 'voice' && m.file_url) {
-    mediaHtml = `<div class="bg-black/5 p-1 rounded-md mb-1"><audio controls src="${m.file_url}" class="h-8 w-44"></audio></div>`;
-} else if (m.type === 'video' && m.file_url) {
-    mediaHtml = `<video controls src="${m.file_url}" class="rounded-lg mb-1 max-h-60 w-full"></video>`;
-} else if (m.type === 'document' && m.file_url) {
-    mediaHtml = `<a href="${m.file_url}" target="_blank" class="flex items-center gap-2 bg-black/5 p-2 rounded-md mb-1 text-sm text-blue-700"><i class="fas fa-file"></i> Document Dekhein</a>`;
-}
+            if (m.type === 'image' && m.file_url) {
+                mediaHtml = `<img src="${m.file_url}" class="rounded-lg mb-1 max-h-60 w-full object-cover shadow-sm" onclick="window.open('${m.file_url}')">`;
+            } else if (m.type === 'voice' && m.file_url) {
+                mediaHtml = `<div class="bg-black/5 p-1 rounded-md mb-1"><audio controls src="${m.file_url}" class="h-8 w-44"></audio></div>`;
+            } else if (m.type === 'video' && m.file_url) {
+                mediaHtml = `<video controls src="${m.file_url}" class="rounded-lg mb-1 max-h-60 w-full"></video>`;
+            } else if (m.type === 'document' && m.file_url) {
+                mediaHtml = `<a href="${m.file_url}" target="_blank" class="flex items-center gap-2 bg-black/5 p-2 rounded-md mb-1 text-sm text-blue-700"><i class="fas fa-file"></i> Document Dekhein</a>`;
+            }
 
             return `
                 <div class="${isMe ? 'bubble-out' : 'bubble-in'} p-2 px-3 animate-pop shadow-sm mb-1">
@@ -143,7 +149,6 @@ if (m.type === 'image' && m.file_url) {
             const msgText = content || msgInp.value.trim();
             if(!msgText && !fUrl) return;
 
-            // Optimistic Update (For Speed)
             const tempMsg = { sender_phone: riderPhone, message: msgText, type: type, file_url: fUrl, status: 'sending' };
             document.getElementById('chatBox').innerHTML += renderBubble(tempMsg);
             document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
@@ -180,44 +185,39 @@ if (m.type === 'image' && m.file_url) {
             if (!mediaRecorder || mediaRecorder.state === "inactive") {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-                    // Try several WhatsApp-compatible formats in order of
-                    // preference. Logged to console so we can see exactly
-                    // what this device/browser actually supports.
-                    const candidates = [
-                        'audio/ogg;codecs=opus',
-                        'audio/ogg; codecs=opus',
-                        'audio/ogg',
-                        'audio/mp4',
-                        'audio/aac',
-                        'audio/webm;codecs=opus',
-                        'audio/webm'
-                    ];
-                    let mimeType = '';
-                    for (const candidate of candidates) {
-                        if (MediaRecorder.isTypeSupported(candidate)) {
-                            mimeType = candidate;
-                            break;
-                        }
-                    }
-                    console.log("Voice recording using mimeType:", mimeType || "(browser default)");
-
-                    mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+                    // Record in whatever format the device actually produces —
+                    // it gets converted to MP3 below regardless of raw format.
+                    mediaRecorder = new MediaRecorder(stream);
                     audioChunks = [];
 
                     mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
                     mediaRecorder.onstop = async () => {
-                        const actualType = mediaRecorder.mimeType || mimeType || 'audio/webm';
-                        const ext = actualType.includes('ogg') ? 'ogg'
-                                  : actualType.includes('mp4') ? 'm4a'
-                                  : actualType.includes('aac') ? 'aac'
-                                  : 'webm';
-                        const blob = new Blob(audioChunks, { type: actualType });
-                        const name = `orders/voice_r_${Date.now()}.${ext}`;
-                        const { data } = await _supabase.storage.from('order-files').upload(name, blob);
-                        if(data) {
-                            const { data: urlData } = _supabase.storage.from('order-files').getPublicUrl(name);
-                            sendMsg('voice', '', urlData.publicUrl);
+                        statusText.innerText = "Converting...";
+                        const rawBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+
+                        try {
+                            if (!ffmpegLoaded) {
+                                await ffmpeg.load();
+                                ffmpegLoaded = true;
+                            }
+
+                            ffmpeg.FS('writeFile', 'input.webm', await fetchFile(rawBlob));
+                            await ffmpeg.run('-i', 'input.webm', '-vn', '-ar', '44100', '-ac', '1', '-b:a', '64k', 'output.mp3');
+                            const outData = ffmpeg.FS('readFile', 'output.mp3');
+                            const mp3Blob = new Blob([outData.buffer], { type: 'audio/mpeg' });
+
+                            const name = `orders/voice_r_${Date.now()}.mp3`;
+                            const { data } = await _supabase.storage.from('order-files').upload(name, mp3Blob);
+                            if (data) {
+                                const { data: urlData } = _supabase.storage.from('order-files').getPublicUrl(name);
+                                sendMsg('voice', '', urlData.publicUrl);
+                            }
+                        } catch (convErr) {
+                            console.error("Audio conversion failed:", convErr);
+                            alert("Voice note convert nahi ho saka, dobara try karein.");
+                        } finally {
+                            statusDot.classList.replace('status-active', 'status-online');
+                            statusText.innerText = "Online";
                         }
                     };
 
@@ -229,19 +229,15 @@ if (m.type === 'image' && m.file_url) {
             } else {
                 mediaRecorder.stop();
                 micBtn.classList.remove('mic-active');
-                statusDot.classList.replace('status-active', 'status-online');
-                statusText.innerText = "Online";
+                statusText.innerText = "Converting...";
             }
         }
 
-
-        // Real-time Listener
         _supabase.channel('rider-chat')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'order_chats', filter: `order_id=eq.${orderId}` }, () => {
                 loadMessages();
             }).subscribe();
 
-        // Header Info
         async function getOrderInfo() {
             const { data } = await _supabase.from('orders').select('customer_name').eq('id', orderId).single();
             if(data) document.getElementById('headerTitle').innerText = data.customer_name;
