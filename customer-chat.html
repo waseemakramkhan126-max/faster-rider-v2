@@ -69,6 +69,15 @@
     </footer>
 
     <script>
+        // Some restrictive WebViews (and browsers without cross-origin
+        // isolation headers) don't expose SharedArrayBuffer at all, which
+        // makes ffmpeg.wasm throw even when using the single-threaded core
+        // (which doesn't actually need real shared memory). This polyfill
+        // just satisfies the existence check.
+        if (typeof SharedArrayBuffer === 'undefined') {
+            window.SharedArrayBuffer = ArrayBuffer;
+        }
+
         const SB_URL = "https://hkabhikizdlbavfkualt.supabase.co";
         const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrYWJoaWtpemRsYmF2Zmt1YWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0ODgyMjUsImV4cCI6MjA5MjA2NDIyNX0.iMlS6-M1aylW8K915LPYDHOg7qUxwu5GelH_CPHLP2U";
         const _supabase = supabase.createClient(SB_URL, SB_KEY);
@@ -80,10 +89,9 @@
         let mediaRecorder;
         let audioChunks = [];
 
-        // ffmpeg.wasm — converts whatever raw format the device records
-        // (usually webm, which WhatsApp rejects) into a proper MP3
-        // (audio/mpeg), which WhatsApp supports on every device regardless
-        // of what the browser's MediaRecorder actually produced.
+        // ffmpeg.wasm — single-threaded core, converts whatever raw format
+        // the device records (usually webm, which WhatsApp rejects) into a
+        // proper MP3 (audio/mpeg), which WhatsApp officially supports.
         const { createFFmpeg, fetchFile } = FFmpeg;
         const ffmpeg = createFFmpeg({ log: false });
         let ffmpegLoaded = false;
@@ -197,11 +205,11 @@
 
                         try {
                             if (!ffmpegLoaded) {
-    await ffmpeg.load({
-        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
-    });
-    ffmpegLoaded = true;
-}
+                                await ffmpeg.load({
+                                    corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+                                });
+                                ffmpegLoaded = true;
+                            }
 
                             ffmpeg.FS('writeFile', 'input.webm', await fetchFile(rawBlob));
                             await ffmpeg.run('-i', 'input.webm', '-vn', '-ar', '44100', '-ac', '1', '-b:a', '64k', 'output.mp3');
@@ -215,10 +223,9 @@
                                 sendMsg('voice', '', urlData.publicUrl);
                             }
                         } catch (convErr) {
-    console.error("Audio conversion failed:", convErr);
-    alert("Convert Error: " + (convErr.message || convErr.toString()));
-}
-                         finally {
+                            console.error("Audio conversion failed:", convErr);
+                            alert("Convert Error: " + (convErr.message || convErr.toString()));
+                        } finally {
                             statusDot.classList.replace('status-active', 'status-online');
                             statusText.innerText = "Online";
                         }
