@@ -98,11 +98,15 @@
             const time = m.created_at ? new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Just now';
             
             let mediaHtml = '';
-            if (m.type === 'image' && m.file_url) {
-                mediaHtml = `<img src="${m.file_url}" class="rounded-lg mb-1 max-h-60 w-full object-cover shadow-sm" onclick="window.open('${m.file_url}')">`;
-            } else if (m.type === 'voice' && m.file_url) {
-                mediaHtml = `<div class="bg-black/5 p-1 rounded-md mb-1"><audio controls src="${m.file_url}" class="h-8 w-44"></audio></div>`;
-            }
+if (m.type === 'image' && m.file_url) {
+    mediaHtml = `<img src="${m.file_url}" class="rounded-lg mb-1 max-h-60 w-full object-cover shadow-sm" onclick="window.open('${m.file_url}')">`;
+} else if (m.type === 'voice' && m.file_url) {
+    mediaHtml = `<div class="bg-black/5 p-1 rounded-md mb-1"><audio controls src="${m.file_url}" class="h-8 w-44"></audio></div>`;
+} else if (m.type === 'video' && m.file_url) {
+    mediaHtml = `<video controls src="${m.file_url}" class="rounded-lg mb-1 max-h-60 w-full"></video>`;
+} else if (m.type === 'document' && m.file_url) {
+    mediaHtml = `<a href="${m.file_url}" target="_blank" class="flex items-center gap-2 bg-black/5 p-2 rounded-md mb-1 text-sm text-blue-700"><i class="fas fa-file"></i> Document Dekhein</a>`;
+}
 
             return `
                 <div class="${isMe ? 'bubble-out' : 'bubble-in'} p-2 px-3 animate-pop shadow-sm mb-1">
