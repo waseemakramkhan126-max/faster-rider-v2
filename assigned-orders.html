@@ -27,34 +27,37 @@
         const rider = JSON.parse(localStorage.getItem('riderData'));
 
         async function load() {
-            if(!rider) return;
-            const { data } = await _supabase.from('orders')
-           .select('*')
-           .eq('rider_id', rider.rider_id)
-           .in('status', ['assigned', 'arrived']) // <-- Ye line change karein
-           .order('created_at', { ascending: false });
+    if(!rider) return;
+    const { data, error } = await _supabase.from('orders')
+   .select('*')
+   .eq('rider_id', rider.rider_id)
+   .not('status', 'in', '(delivered,completed,cancelled)')
+   .order('created_at', { ascending: false });
 
-            const container = document.getElementById('list');
-            if(!data || data.length === 0) {
-                container.innerHTML = `<div class="text-center py-20 opacity-20 font-black uppercase text-xs">No Tasks assigned</div>`;
-                return;
-            }
+    if (error) console.error("Task load error:", error);
 
-            container.innerHTML = data.map(o => `
-                <div onclick="location.href='order-details.html?id=${o.id}'" class="bg-slate-800/40 p-5 rounded-[2rem] border border-white/5 flex items-center justify-between shadow-xl active:scale-95 transition-all cursor-pointer hover:bg-slate-800/60">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center text-slate-900 font-black text-lg capitalize">${o.customer_name[0]}</div>
-                        <div>
-                            <h3 class="font-bold text-white">${o.customer_name}</h3>
-                            <span class="text-[9px] px-2 py-0.5 bg-orange-500/10 text-orange-500 rounded-full font-black uppercase tracking-widest border border-orange-500/20">
-                                ${o.rider_status || 'New Task'}
-                            </span>
-                        </div>
-                    </div>
-                    <i class="fas fa-chevron-right text-slate-600"></i>
+    const container = document.getElementById('list');
+    if(!data || data.length === 0) {
+        container.innerHTML = `<div class="text-center py-20 opacity-20 font-black uppercase text-xs">No Tasks assigned</div>`;
+        return;
+    }
+
+    container.innerHTML = data.map(o => `
+        <div onclick="location.href='order-details.html?id=${o.id}'" class="bg-slate-800/40 p-5 rounded-[2rem] border border-white/5 flex items-center justify-between shadow-xl active:scale-95 transition-all cursor-pointer hover:bg-slate-800/60">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center text-slate-900 font-black text-lg capitalize">${(o.customer_name || '?')[0]}</div>
+                <div>
+                    <h3 class="font-bold text-white">${o.customer_name || 'Unknown'}</h3>
+                    <span class="text-[9px] px-2 py-0.5 bg-orange-500/10 text-orange-500 rounded-full font-black uppercase tracking-widest border border-orange-500/20">
+                        ${o.rider_status || 'New Task'}
+                    </span>
                 </div>
-            `).join('');
-        }
+            </div>
+            <i class="fas fa-chevron-right text-slate-600"></i>
+        </div>
+    `).join('');
+}
+
         load(); // Initial load
 
         // Realtime listener for assigned tasks
