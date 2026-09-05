@@ -197,9 +197,11 @@
 
                         try {
                             if (!ffmpegLoaded) {
-                                await ffmpeg.load();
-                                ffmpegLoaded = true;
-                            }
+    await ffmpeg.load({
+        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+    });
+    ffmpegLoaded = true;
+}
 
                             ffmpeg.FS('writeFile', 'input.webm', await fetchFile(rawBlob));
                             await ffmpeg.run('-i', 'input.webm', '-vn', '-ar', '44100', '-ac', '1', '-b:a', '64k', 'output.mp3');
