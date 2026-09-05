@@ -181,20 +181,38 @@ if (m.type === 'image' && m.file_url) {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-                    // WhatsApp doesn't support audio/webm — record in ogg/opus
-                    // instead (falls back to webm only if the browser can't
-                    // do ogg, e.g. some iOS Safari versions).
-                    const mimeType = MediaRecorder.isTypeSupported('audio/ogg; codecs=opus')
-                        ? 'audio/ogg; codecs=opus'
-                        : 'audio/webm';
+                    // Try several WhatsApp-compatible formats in order of
+                    // preference. Logged to console so we can see exactly
+                    // what this device/browser actually supports.
+                    const candidates = [
+                        'audio/ogg;codecs=opus',
+                        'audio/ogg; codecs=opus',
+                        'audio/ogg',
+                        'audio/mp4',
+                        'audio/aac',
+                        'audio/webm;codecs=opus',
+                        'audio/webm'
+                    ];
+                    let mimeType = '';
+                    for (const candidate of candidates) {
+                        if (MediaRecorder.isTypeSupported(candidate)) {
+                            mimeType = candidate;
+                            break;
+                        }
+                    }
+                    console.log("Voice recording using mimeType:", mimeType || "(browser default)");
 
-                    mediaRecorder = new MediaRecorder(stream, { mimeType });
+                    mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
                     audioChunks = [];
-                    
+
                     mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
                     mediaRecorder.onstop = async () => {
-                        const ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
-                        const blob = new Blob(audioChunks, { type: mimeType });
+                        const actualType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+                        const ext = actualType.includes('ogg') ? 'ogg'
+                                  : actualType.includes('mp4') ? 'm4a'
+                                  : actualType.includes('aac') ? 'aac'
+                                  : 'webm';
+                        const blob = new Blob(audioChunks, { type: actualType });
                         const name = `orders/voice_r_${Date.now()}.${ext}`;
                         const { data } = await _supabase.storage.from('order-files').upload(name, blob);
                         if(data) {
@@ -215,6 +233,7 @@ if (m.type === 'image' && m.file_url) {
                 statusText.innerText = "Online";
             }
         }
+
 
         // Real-time Listener
         _supabase.channel('rider-chat')
