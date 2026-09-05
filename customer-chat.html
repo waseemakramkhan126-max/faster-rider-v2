@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <title>Faster Rider - Customer Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; height: 100dvh; }
         .chat-bg { background-color: #e5ddd5; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-attachment: fixed; }
         .bubble-in, .bubble-out { max-width: 85%; word-wrap: break-word; overflow-wrap: break-word; word-break: break-all; }
         .bubble-in { background: white; border-radius: 0 15px 15px 15px; align-self: flex-start; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
@@ -79,7 +79,16 @@
         const riderPhone = localStorage.getItem('rider_phone') || 'Rider';
 
         let mediaRecorder;
-        let audioChunks = [];
+let audioChunks = [];
+
+// Mobile keyboard khulne/band hone par footer ko sahi jagah rakhta hai
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+        const footer = document.querySelector('footer');
+        const offset = window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop;
+        footer.style.transform = `translateY(-${offset > 0 ? offset : 0}px)`;
+    });
+}
 
         function autoHeight(el) {
             el.style.height = '36px'; 
