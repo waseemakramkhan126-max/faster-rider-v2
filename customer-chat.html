@@ -180,13 +180,22 @@ if (m.type === 'image' && m.file_url) {
             if (!mediaRecorder || mediaRecorder.state === "inactive") {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
+
+                    // WhatsApp doesn't support audio/webm — record in ogg/opus
+                    // instead (falls back to webm only if the browser can't
+                    // do ogg, e.g. some iOS Safari versions).
+                    const mimeType = MediaRecorder.isTypeSupported('audio/ogg; codecs=opus')
+                        ? 'audio/ogg; codecs=opus'
+                        : 'audio/webm';
+
+                    mediaRecorder = new MediaRecorder(stream, { mimeType });
                     audioChunks = [];
                     
                     mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
                     mediaRecorder.onstop = async () => {
-                        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                        const name = `orders/voice_r_${Date.now()}.webm`;
+                        const ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
+                        const blob = new Blob(audioChunks, { type: mimeType });
+                        const name = `orders/voice_r_${Date.now()}.${ext}`;
                         const { data } = await _supabase.storage.from('order-files').upload(name, blob);
                         if(data) {
                             const { data: urlData } = _supabase.storage.from('order-files').getPublicUrl(name);
