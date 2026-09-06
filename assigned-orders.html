@@ -27,57 +27,135 @@
         const rider = JSON.parse(localStorage.getItem('riderData'));
 
         async function load() {
-    if(!rider) return;
-    const { data, error } = await _supabase
-    .from('orders')
-    .select('*')
-    .eq('rider_id', rider.rider_id)
-    .or(
-        'rider_status.ilike.accepted,' +
-        'rider_status.ilike.bill uploaded,' +
-        'rider_status.ilike.arrived'
-    )
-    .order('created_at', { ascending: false });
-    if (error) console.error("Task load error:", error);
-
-    const container = document.getElementById('list');
-    if(!data || data.length === 0) {
-        container.innerHTML = `<div class="text-center py-20 opacity-20 font-black uppercase text-xs">No Tasks assigned</div>`;
+    if (!rider || !rider.rider_id) {
+        console.error("❌ Rider data not found:", rider);
         return;
     }
 
-    container.innerHTML = data.map(o => `
-        <div onclick="location.href='order-details.html?id=${o.id}'" class="bg-slate-800/40 p-5 rounded-[2rem] border border-white/5 flex items-center justify-between shadow-xl active:scale-95 transition-all cursor-pointer hover:bg-slate-800/60">
+    console.log("👤 Current Rider ID:", rider.rider_id);
+
+    const { data, error } = await _supabase
+        .from('orders')
+        .select('*')
+        .eq('rider_id', rider.rider_id)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("❌ Task load error:", error);
+
+        document.getElementById('list').innerHTML = `
+            <div class="text-center py-20 text-red-400 font-bold">
+                Error loading tasks
+            </div>
+        `;
+
+        return;
+    }
+
+    console.log("📦 All orders for this rider:", data);
+
+    // Sirf ye 3 rider_status show karne hain
+    const allowedStatuses = [
+        'accepted',
+        'bill uploaded',
+        'arrived'
+    ];
+
+    // Case-insensitive filtering
+    const activeOrders = (data || []).filter(order => {
+
+        const riderStatus = String(order.rider_status || '')
+            .trim()
+            .toLowerCase();
+
+        console.log(
+            "Order:",
+            order.id,
+            "| rider_id:",
+            order.rider_id,
+            "| status:",
+            order.status,
+            "| rider_status:",
+            riderStatus
+        );
+
+        return allowedStatuses.includes(riderStatus);
+    });
+
+    console.log("✅ Orders to show:", activeOrders);
+
+    const container = document.getElementById('list');
+
+    if (activeOrders.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-20 opacity-20 font-black uppercase text-xs">
+                No Tasks assigned
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = activeOrders.map(o => `
+        <div 
+            onclick="location.href='order-details.html?id=${o.id}'"
+            class="bg-slate-800/40 p-5 rounded-[2rem] border border-white/5 flex items-center justify-between shadow-xl active:scale-95 transition-all cursor-pointer hover:bg-slate-800/60"
+        >
+
             <div class="flex items-center gap-4">
-                <div class="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center text-slate-900 font-black text-lg capitalize">${(o.customer_name || '?')[0]}</div>
+
+                <div class="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center text-slate-900 font-black text-lg capitalize">
+                    ${(o.customer_name || '?')[0]}
+                </div>
+
                 <div>
-                    <h3 class="font-bold text-white">${o.customer_name || 'Unknown'}</h3>
+
+                    <h3 class="font-bold text-white">
+                        ${o.customer_name || 'Unknown'}
+                    </h3>
+
                     <span class="text-[9px] px-2 py-0.5 bg-orange-500/10 text-orange-500 rounded-full font-black uppercase tracking-widest border border-orange-500/20">
                         ${o.rider_status || 'New Task'}
                     </span>
+
                 </div>
+
             </div>
+
             <i class="fas fa-chevron-right text-slate-600"></i>
+
         </div>
     `).join('');
 }
 
         load(); // Initial load
 
-        // Realtime listener for assigned tasks
-        if (rider && rider.rider_id) {
-            _supabase.channel('live-assigned-tasks')
-                .on('postgres_changes', { 
-                    event: '*', 
-                    schema: 'public', 
-                    table: 'orders',
-                    filter: `rider_id=eq.${rider.rider_id}` // Sirf is specific rider ke orders sune
-                }, (payload) => {
-                    console.log("Assigned task update:", payload);
-                    load(); // List refresh kare
-                })
-                .subscribe();
-        }
+        // Realtime listener for this rider's orders
+if (rider && rider.rider_id) {
+
+    _supabase
+        .channel('live-rider-orders')
+        .on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'orders',
+                filter: `rider_id=eq.${rider.rider_id}`
+            },
+            (payload) => {
+
+                console.log("🔄 Realtime order update:", payload);
+
+                // Order change hote hi list dobara load
+                load();
+            }
+        )
+        .subscribe((status) => {
+
+            console.log("📡 Realtime subscription status:", status);
+
+        });
+}
     </script>
 </body>
 </html>
