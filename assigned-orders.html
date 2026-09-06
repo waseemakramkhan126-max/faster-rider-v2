@@ -28,12 +28,16 @@
 
         async function load() {
     if(!rider) return;
-    const { data, error } = await _supabase.from('orders')
-   .select('*')
-   .eq('rider_id', rider.rider_id)
-   .not('status', 'in', '(delivered,completed,cancelled)')
-   .order('created_at', { ascending: false });
-
+    const { data, error } = await _supabase
+    .from('orders')
+    .select('*')
+    .eq('rider_id', rider.rider_id)
+    .or(
+        'rider_status.ilike.accepted,' +
+        'rider_status.ilike.bill uploaded,' +
+        'rider_status.ilike.arrived'
+    )
+    .order('created_at', { ascending: false });
     if (error) console.error("Task load error:", error);
 
     const container = document.getElementById('list');
